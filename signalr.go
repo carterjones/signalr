@@ -1,5 +1,7 @@
 // Package signalr provides the client side implementation of the WebSocket
-// portion of the SignalR protocol.
+// portion of the SignalR protocol. This was almost entirely written using
+// https://blog.3d-logic.com/2015/03/29/signalr-on-the-wire-an-informal-description-of-the-signalr-protocol/
+// as a reference guide.
 package signalr
 
 import (
@@ -14,6 +16,7 @@ import (
 	"time"
 
 	"github.com/carterjones/helpers/trace"
+	"github.com/carterjones/signalr/hubs"
 	"github.com/gorilla/websocket"
 )
 
@@ -42,101 +45,20 @@ func (nr *negotiateResponse) connectionTokenEscaped() string {
 	return url.QueryEscape(nr.ConnectionToken)
 }
 
-// PersistentConnectionMessage represents a message sent from the server to the
-// websocket connection.
-type PersistentConnectionMessage struct {
+// Message represents a message sent from the server to the persistent websocket
+// connection.
+type Message struct {
 	// message id, present for all non-KeepAlive messages
 	C string
 
 	// an array containing actual data
-	M []HubsClientMessage
+	M []hubs.ClientMsg
 
 	// indicates that the transport was initialized (a.k.a. init message)
 	S int
 
 	// groups token – an encrypted string representing group membership
 	G string
-}
-
-// HubsClientMessage represents a message sent to the Hubs API from the client.
-type HubsClientMessage struct {
-	// invocation identifier – allows to match up responses with requests
-	I int
-
-	// the name of the hub
-	H string
-
-	// the name of the method
-	M string
-
-	// arguments (an array, can be empty if the method does not have any
-	// parameters)
-	A []interface{}
-
-	// state – a dictionary containing additional custom data (optional)
-	S *json.RawMessage `json:",omitempty"`
-}
-
-// MarshalJSON converts the current message into a JSON-formatted byte array. It
-// will perform different types of conversion based on the Golang type of the
-// "A" field. For instance, an array will be converted into a JSON object
-// looking like [...], whereas a byte array would look like "...".
-func (hcm *HubsClientMessage) MarshalJSON() (buf []byte, err error) {
-	var args []byte
-	for _, a := range hcm.A {
-		switch a.(type) {
-		case []byte:
-			args = append(args, a.([]byte)...)
-		case string:
-			args = append(args, []byte(a.(string))...)
-		default:
-			err = errors.New("unsupported argument type")
-			trace.Error(err)
-			return
-		}
-	}
-
-	return json.Marshal(&struct {
-		I int
-		H string
-		M string
-		A []byte
-		S *json.RawMessage `json:"omitempty"`
-	}{
-		I: hcm.I,
-		H: hcm.H,
-		M: hcm.M,
-		A: args,
-		S: hcm.S,
-	})
-}
-
-// HubsServerMessage represents a message sent to the Hubs API from the server.
-type HubsServerMessage struct {
-	// invocation Id (always present)
-	I int
-
-	// the value returned by the server method (present if the method is not
-	// void)
-	R *json.RawMessage `json:",omitempty"`
-
-	// error message
-	E *string `json:",omitempty"`
-
-	// true if this is a hub error
-	H *bool `json:",omitempty"`
-
-	// an object containing additional error data (can only be present for
-	// hub errors)
-	D *json.RawMessage `json:",omitempty"`
-
-	// stack trace (if detailed error reporting (i.e. the
-	// HubConfiguration.EnableDetailedErrors property) is turned on on the
-	// server)
-	T *json.RawMessage `json:",omitempty"`
-
-	// state – a dictionary containing additional custom data (optional)
-	S *json.RawMessage `json:",omitempty"`
 }
 
 // Client represents a SignlR client. It manages connections so you don't have
@@ -149,7 +71,7 @@ type Client struct {
 
 	conn *websocket.Conn
 
-	messages chan PersistentConnectionMessage
+	messages chan Message
 }
 
 func (c *Client) setConnectionData(cd string) {
@@ -292,7 +214,7 @@ func (c *Client) start(nr negotiateResponse, conn *websocket.Conn) (err error) {
 	}
 
 	// Extract the server message.
-	var pcm PersistentConnectionMessage
+	var pcm Message
 	err = json.Unmarshal(p, &pcm)
 	if err != nil {
 		trace.Error(err)
@@ -324,7 +246,7 @@ func (c *Client) init(host, protocol, connectionData string) (err error) {
 	c.host = host
 	c.protocol = protocol
 	c.setConnectionData(connectionData)
-	c.messages = make(chan PersistentConnectionMessage)
+	c.messages = make(chan Message)
 
 	nr, err := c.negotiate()
 	if err != nil {
@@ -359,7 +281,7 @@ func (c *Client) readMessages() {
 			continue
 		}
 
-		var pcm PersistentConnectionMessage
+		var pcm Message
 		err = json.Unmarshal(p, &pcm)
 		if err != nil {
 			trace.Error(err)
@@ -373,8 +295,8 @@ func (c *Client) readMessages() {
 	}
 }
 
-// Write sends a message to the connection.
-func (c *Client) Write(m HubsClientMessage) (err error) {
+// Send sends a message to the websocket connection.
+func (c *Client) Send(m hubs.ClientMsg) (err error) {
 	err = c.conn.WriteJSON(m)
 	if err != nil {
 		trace.Error(err)
@@ -384,7 +306,7 @@ func (c *Client) Write(m HubsClientMessage) (err error) {
 }
 
 // Messages returns the channel that receives persistent connection messages.
-func (c *Client) Messages() <-chan PersistentConnectionMessage {
+func (c *Client) Messages() <-chan Message {
 	return c.messages
 }
 
