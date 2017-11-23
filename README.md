@@ -1,3 +1,5 @@
+[![GoDoc](https://godoc.org/github.com/carterjones/signalr?status.svg)](https://godoc.org/github.com/carterjones/signalr)
+
 # Overview
 
 This is my personal attempt at implementating the client side of the WebSocket portion of the SignalR protocol. I use it for various altcoin trading platforms that use SignalR.

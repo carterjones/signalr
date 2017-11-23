@@ -1,3 +1,5 @@
+// Package signalr provides the client side implementation of the WebSocket
+// portion of the SignalR protocol.
 package signalr
 
 import (
