@@ -281,17 +281,19 @@ func (c *Client) readMessages() {
 			continue
 		}
 
-		var pcm Message
-		err = json.Unmarshal(p, &pcm)
+		trace.DebugMessage("[signalR.readMessages] Attempting to unmarshal...")
+
+		var msg Message
+		err = json.Unmarshal(p, &msg)
 		if err != nil {
 			trace.Error(err)
 			return
 		}
 
-		dbgMsg := fmt.Sprintf("%v", pcm)
-		trace.DebugMessage("[signalR.readMessages] " + dbgMsg)
+		dbgMsg := fmt.Sprintf("%v", msg)
+		trace.DebugMessage("[signalR.readMessages] Unmarshalled message: " + dbgMsg)
 
-		c.messages <- pcm
+		c.messages <- msg
 	}
 }
 
