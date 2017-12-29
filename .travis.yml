@@ -1,3 +1,6 @@
 language: go
 go:
   - 1.9
+script:
+  - ./lint.sh
+  - ./test.sh
