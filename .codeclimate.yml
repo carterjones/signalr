@@ -1,0 +1,11 @@
+plugins:
+  gofmt:
+    enabled: true
+  golint:
+    enabled: true
+  govet:
+    enabled: true
+  radon:
+    enabled: true
+    config:
+      threshold: "B"
