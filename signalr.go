@@ -124,7 +124,7 @@ func (c *Client) makeURL(command string) (u url.URL) {
 	return
 }
 
-func (c *Client) negotiate() (err error) {
+func (c *Client) Negotiate() (err error) {
 	// Reset the connection token in case it has been set.
 	c.connectionToken = ""
 
@@ -203,7 +203,7 @@ func (c *Client) negotiate() (err error) {
 	return
 }
 
-func (c *Client) start(conn *websocket.Conn) (err error) {
+func (c *Client) Start(conn *websocket.Conn) (err error) {
 	u := c.makeURL("start")
 
 	resp, err := http.Get(u.String())
@@ -275,7 +275,7 @@ func (c *Client) start(conn *websocket.Conn) (err error) {
 	return
 }
 
-func (c *Client) connect() (conn *websocket.Conn, err error) {
+func (c *Client) Connect() (conn *websocket.Conn, err error) {
 	// Example connect URL:
 	// https://socket.bittrex.com/signalr/connect?
 	//   transport=webSockets&
@@ -321,7 +321,7 @@ func (c *Client) connect() (conn *websocket.Conn, err error) {
 	return
 }
 
-func (c *Client) reconnect() {
+func (c *Client) Reconnect() {
 	// Note from
 	// https://blog.3d-logic.com/2015/03/29/signalr-on-the-wire-an-informal-description-of-the-signalr-protocol/
 	// Once the channel is set up there are no further HTTP requests until
@@ -343,20 +343,20 @@ func (c *Client) reconnect() {
 // Init connects to the host and performs the websocket initialization routines
 // that are part of the SignalR specification.
 func (c *Client) Init() (err error) {
-	err = c.negotiate()
+	err = c.Negotiate()
 	if err != nil {
 		trace.Error(err)
 		return
 	}
 
 	var conn *websocket.Conn
-	conn, err = c.connect()
+	conn, err = c.Connect()
 	if err != nil {
 		trace.Error(err)
 		return
 	}
 
-	err = c.start(conn)
+	err = c.Start(conn)
 	if err != nil {
 		trace.Error(err)
 		return
