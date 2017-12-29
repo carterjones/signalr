@@ -1,3 +1,14 @@
+version: "2"
+checks:
+  method-complexity:
+    config:
+      threshold: 12
+  file-lines:
+    enabled: false
+  method-lines:
+    enabled: false
+  return-statements:
+    enabled: false
 plugins:
   gofmt:
     enabled: true
