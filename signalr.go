@@ -132,6 +132,7 @@ func (c *Client) makeURL(command string) (u url.URL) {
 	return
 }
 
+// Negotiate implements the negotiate step of the SignalR connection sequence.
 func (c *Client) Negotiate() (err error) {
 	// Reset the connection token in case it has been set.
 	c.connectionToken = ""
@@ -211,6 +212,7 @@ func (c *Client) Negotiate() (err error) {
 	return
 }
 
+// Start implements the start step of the SignalR connection sequence.
 func (c *Client) Start(conn *websocket.Conn) (err error) {
 	u := c.makeURL("start")
 
@@ -283,6 +285,7 @@ func (c *Client) Start(conn *websocket.Conn) (err error) {
 	return
 }
 
+// Connect implements the connect step of the SignalR connection sequence.
 func (c *Client) Connect() (conn *websocket.Conn, err error) {
 	// Example connect URL:
 	// https://socket.bittrex.com/signalr/connect?
@@ -335,6 +338,7 @@ func (c *Client) Connect() (conn *websocket.Conn, err error) {
 	return
 }
 
+// Reconnect implements the reconnect step of the SignalR connection sequence.
 func (c *Client) Reconnect() {
 	// Note from
 	// https://blog.3d-logic.com/2015/03/29/signalr-on-the-wire-an-informal-description-of-the-signalr-protocol/
