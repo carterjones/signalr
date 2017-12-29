@@ -1,5 +1,7 @@
 [![GoDoc](https://godoc.org/github.com/carterjones/signalr?status.svg)](https://godoc.org/github.com/carterjones/signalr)
 [![Build Status](https://travis-ci.org/carterjones/signalr.svg?branch=master)](https://travis-ci.org/carterjones/signalr)
+[![Maintainability](https://api.codeclimate.com/v1/badges/c561e13d50cdd11e97a1/maintainability)](https://codeclimate.com/github/carterjones/signalr/maintainability)
+[![Test Coverage](https://api.codeclimate.com/v1/badges/c561e13d50cdd11e97a1/test_coverage)](https://codeclimate.com/github/carterjones/signalr/test_coverage)
 
 # Overview
 
