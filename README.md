@@ -1,4 +1,5 @@
 [![GoDoc](https://godoc.org/github.com/carterjones/signalr?status.svg)](https://godoc.org/github.com/carterjones/signalr)
+[![Build Status](https://travis-ci.org/carterjones/signalr.svg?branch=master)](https://travis-ci.org/carterjones/signalr)
 
 # Overview
 
