@@ -1,6 +1,7 @@
 package signalr_test
 
 import (
+	"crypto/x509"
 	"log"
 	"net/http"
 	"net/http/httptest"
@@ -62,7 +63,7 @@ func start(w http.ResponseWriter, r *http.Request) {
 }
 
 func TestNew(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/negotiate") {
 			negotiate(w, r)
 		} else if strings.Contains(r.URL.Path, "/connect") {
@@ -75,11 +76,22 @@ func TestNew(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	host := strings.TrimPrefix(ts.URL, "http://")
+	// Remove the scheme from the URL and save it as the host identifier.
+	host := strings.TrimPrefix(ts.URL, "https://")
 
 	// Prepare a SignalR client.
 	c := signalr.New(host, "1.5", "/signalr", "all the data")
-	c.Scheme = signalr.HTTP
+	c.HTTPClient = ts.Client()
+	c.TLSClientConfig = ts.TLS
+
+	// Save the testing certificate to the TLS client config.
+	//
+	// I'm not sure why using ts.CLient() doesn't populate certificate
+	// information, nor do I understand why ts.TLS doesn't contain
+	// certificate information either. With that said, this seems to make
+	// the testing TLS certificate be trusted by the client.
+	c.TLSClientConfig.RootCAs = x509.NewCertPool()
+	c.TLSClientConfig.RootCAs.AddCert(ts.Certificate())
 
 	// Initialize the client.
 	err := c.Init()

@@ -5,6 +5,7 @@
 package signalr
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"io/ioutil"
@@ -67,9 +68,16 @@ type Client struct {
 
 	ConnectionData string
 
+	// The HTTPClient used to initialize the websocket connection.
+	HTTPClient *http.Client
+
 	// The raw websocket connection that results from a successful
 	// connection to the SignalR server.
 	Conn *websocket.Conn
+
+	// An optional setting to provide a non-default TLS configuration to use
+	// when connecting to the websocket.
+	TLSClientConfig *tls.Config
 
 	// Either HTTPS or HTTP.
 	Scheme Scheme
@@ -133,7 +141,7 @@ func (c *Client) Negotiate() (err error) {
 
 	for i := 0; i < 5; i++ {
 		var resp *http.Response
-		resp, err = http.Get(u.String())
+		resp, err = c.HTTPClient.Get(u.String())
 		if err != nil {
 			trace.Error(err)
 			return
@@ -206,7 +214,7 @@ func (c *Client) Negotiate() (err error) {
 func (c *Client) Start(conn *websocket.Conn) (err error) {
 	u := c.makeURL("start")
 
-	resp, err := http.Get(u.String())
+	resp, err := c.HTTPClient.Get(u.String())
 	if err != nil {
 		trace.Error(err)
 		return
@@ -288,7 +296,13 @@ func (c *Client) Connect() (conn *websocket.Conn, err error) {
 	// Create the URL.
 	u := c.makeURL("connect")
 
-	conn, resp, err := websocket.DefaultDialer.Dial(u.String(), http.Header{})
+	// Create a dialer that uses the supplied TLS client configuration.
+	dialer := &websocket.Dialer{
+		Proxy:           http.ProxyFromEnvironment,
+		TLSClientConfig: c.TLSClientConfig,
+	}
+
+	conn, resp, err := dialer.Dial(u.String(), http.Header{})
 	if err != nil {
 		trace.Error(err)
 
@@ -415,6 +429,7 @@ func New(host, protocol, endpoint, connectionData string) (c *Client) {
 	c.Endpoint = endpoint
 	c.ConnectionData = url.QueryEscape(connectionData)
 	c.messages = make(chan Message)
+	c.HTTPClient = new(http.Client)
 
 	// Default to using a secure scheme.
 	c.Scheme = HTTPS
