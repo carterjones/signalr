@@ -110,10 +110,6 @@ func (c *Client) makeURL(command string) (u url.URL) {
 	case "negotiate":
 		u.Scheme = string(c.Scheme)
 		u.Path += "/negotiate"
-	case "start":
-		u.Scheme = string(c.Scheme)
-		params.Set("transport", "webSockets")
-		u.Path += "/start"
 	case "connect":
 		// Conditionally encrypt the traffic depending on the initial
 		// connection's encryption.
@@ -124,6 +120,10 @@ func (c *Client) makeURL(command string) (u url.URL) {
 		}
 		params.Set("transport", "webSockets")
 		u.Path += "/connect"
+	case "start":
+		u.Scheme = string(c.Scheme)
+		params.Set("transport", "webSockets")
+		u.Path += "/start"
 	}
 
 	// Set the parameters.
@@ -212,6 +212,59 @@ func (c *Client) Negotiate() (err error) {
 	return
 }
 
+// Connect implements the connect step of the SignalR connection sequence.
+func (c *Client) Connect() (conn *websocket.Conn, err error) {
+	// Example connect URL:
+	// https://socket.bittrex.com/signalr/connect?
+	//   transport=webSockets&
+	//   clientProtocol=1.5&
+	//   connectionToken=<token>&
+	//   connectionData=%5B%7B%22name%22%3A%22corehub%22%7D%5D&
+	//   tid=5
+	// -> returns connection ID. (e.g.: d-F2577E41-B,0|If60z,0|If600,1)
+
+	// Create the URL.
+	u := c.makeURL("connect")
+
+	// Create a dialer that uses the supplied TLS client configuration.
+	dialer := &websocket.Dialer{
+		Proxy:           http.ProxyFromEnvironment,
+		TLSClientConfig: c.TLSClientConfig,
+	}
+
+	conn, resp, err := dialer.Dial(u.String(), http.Header{})
+	if err != nil {
+		trace.Error(err)
+
+		if err == websocket.ErrBadHandshake {
+			trace.Error(err)
+
+			defer func() {
+				derr := resp.Body.Close()
+				if derr != nil {
+					trace.Error(derr)
+				}
+			}()
+
+			var body []byte
+			body, err = ioutil.ReadAll(resp.Body)
+			if err != nil {
+				trace.Error(err)
+				return
+			}
+
+			err = errors.New(string(body))
+			trace.Error(err)
+
+			return
+		}
+	}
+
+	// TODO: determine if we need to set the connection ID here.
+
+	return
+}
+
 // Start implements the start step of the SignalR connection sequence.
 func (c *Client) Start(conn *websocket.Conn) (err error) {
 	u := c.makeURL("start")
@@ -282,59 +335,6 @@ func (c *Client) Start(conn *websocket.Conn) (err error) {
 	// Since we got to this point, the connection is successful. So we set
 	// the connection for the client.
 	c.Conn = conn
-	return
-}
-
-// Connect implements the connect step of the SignalR connection sequence.
-func (c *Client) Connect() (conn *websocket.Conn, err error) {
-	// Example connect URL:
-	// https://socket.bittrex.com/signalr/connect?
-	//   transport=webSockets&
-	//   clientProtocol=1.5&
-	//   connectionToken=<token>&
-	//   connectionData=%5B%7B%22name%22%3A%22corehub%22%7D%5D&
-	//   tid=5
-	// -> returns connection ID. (e.g.: d-F2577E41-B,0|If60z,0|If600,1)
-
-	// Create the URL.
-	u := c.makeURL("connect")
-
-	// Create a dialer that uses the supplied TLS client configuration.
-	dialer := &websocket.Dialer{
-		Proxy:           http.ProxyFromEnvironment,
-		TLSClientConfig: c.TLSClientConfig,
-	}
-
-	conn, resp, err := dialer.Dial(u.String(), http.Header{})
-	if err != nil {
-		trace.Error(err)
-
-		if err == websocket.ErrBadHandshake {
-			trace.Error(err)
-
-			defer func() {
-				derr := resp.Body.Close()
-				if derr != nil {
-					trace.Error(derr)
-				}
-			}()
-
-			var body []byte
-			body, err = ioutil.ReadAll(resp.Body)
-			if err != nil {
-				trace.Error(err)
-				return
-			}
-
-			err = errors.New(string(body))
-			trace.Error(err)
-
-			return
-		}
-	}
-
-	// TODO: determine if we need to set the connection ID here.
-
 	return
 }
 
