@@ -81,7 +81,19 @@ func start(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func TestNormal(t *testing.T) {
+func TestClient_Negotiate(t *testing.T) {
+}
+
+func TestClient_Connect(t *testing.T) {
+}
+
+func TestClient_Start(t *testing.T) {
+}
+
+func TestClient_Reconnect(t *testing.T) {
+}
+
+func TestClient_Init(t *testing.T) {
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/negotiate") {
 			negotiate(w, r)
@@ -117,6 +129,15 @@ func TestNormal(t *testing.T) {
 	if err != nil {
 		log.Panic(err)
 	}
+
+	// TODO: literally any form of validatation
+	// TODO: check for specific errors
+}
+
+func TestClient_Send(t *testing.T) {
+}
+
+func TestClient_Messages(t *testing.T) {
 }
 
 func TestNew(t *testing.T) {
