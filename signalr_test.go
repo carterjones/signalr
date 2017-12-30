@@ -58,6 +58,17 @@ func newTestServer(fn http.HandlerFunc, tls bool) (ts *httptest.Server) {
 	return
 }
 
+func newTestClient(protocol, endpoint, connectionData string, ts *httptest.Server) (c *signalr.Client) {
+	// Prepare a SignalR client.
+	c = signalr.New(hostFromServerURL(ts.URL), protocol, endpoint, connectionData)
+	c.HTTPClient = ts.Client()
+
+	// Save the TLS config in case this is using TLS.
+	c.TLSClientConfig = ts.TLS
+
+	return
+}
+
 func negotiate(w http.ResponseWriter, r *http.Request) {
 	_, err := w.Write([]byte(`{"ConnectionToken":"hello world","ConnectionId":"1234-ABC","URL":"/signalr"}`))
 	if err != nil {
@@ -133,10 +144,7 @@ func TestClient_Init(t *testing.T) {
 	}), true)
 	defer ts.Close()
 
-	// Prepare a SignalR client.
-	c := signalr.New(hostFromServerURL(ts.URL), "1.5", "/signalr", "all the data")
-	c.HTTPClient = ts.Client()
-	c.TLSClientConfig = ts.TLS
+	c := newTestClient("1.5", "/signalr", "all the data", ts)
 
 	// Initialize the client.
 	err := c.Init()
