@@ -32,6 +32,32 @@ func notNil(tb testing.TB, id string, act interface{}) {
 	}
 }
 
+func hostFromServerURL(url string) (host string) {
+	host = strings.TrimPrefix(url, "https://")
+	host = strings.TrimPrefix(host, "http://")
+	return
+}
+
+func newTestServer(fn http.HandlerFunc, tls bool) (ts *httptest.Server) {
+	if tls {
+		// Create the server.
+		ts = httptest.NewTLSServer(fn)
+
+		// Save the testing certificate to the TLS client config.
+		//
+		// I'm not sure why ts.TLS doesn't contain certificate
+		// information. However, this seems to make the testing TLS
+		// certificate be trusted by the client.
+		ts.TLS.RootCAs = x509.NewCertPool()
+		ts.TLS.RootCAs.AddCert(ts.Certificate())
+	} else {
+		// Create the server.
+		ts = httptest.NewServer(fn)
+	}
+
+	return
+}
+
 func negotiate(w http.ResponseWriter, r *http.Request) {
 	_, err := w.Write([]byte(`{"ConnectionToken":"hello world","ConnectionId":"1234-ABC","URL":"/signalr"}`))
 	if err != nil {
@@ -94,7 +120,7 @@ func TestClient_Reconnect(t *testing.T) {
 }
 
 func TestClient_Init(t *testing.T) {
-	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	ts := newTestServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/negotiate") {
 			negotiate(w, r)
 		} else if strings.Contains(r.URL.Path, "/connect") {
@@ -104,25 +130,13 @@ func TestClient_Init(t *testing.T) {
 		} else {
 			log.Println("url:", r.URL)
 		}
-	}))
+	}), true)
 	defer ts.Close()
 
-	// Remove the scheme from the URL and save it as the host identifier.
-	host := strings.TrimPrefix(ts.URL, "https://")
-
 	// Prepare a SignalR client.
-	c := signalr.New(host, "1.5", "/signalr", "all the data")
+	c := signalr.New(hostFromServerURL(ts.URL), "1.5", "/signalr", "all the data")
 	c.HTTPClient = ts.Client()
 	c.TLSClientConfig = ts.TLS
-
-	// Save the testing certificate to the TLS client config.
-	//
-	// I'm not sure why using ts.CLient() doesn't populate certificate
-	// information, nor do I understand why ts.TLS doesn't contain
-	// certificate information either. With that said, this seems to make
-	// the testing TLS certificate be trusted by the client.
-	c.TLSClientConfig.RootCAs = x509.NewCertPool()
-	c.TLSClientConfig.RootCAs.AddCert(ts.Certificate())
 
 	// Initialize the client.
 	err := c.Init()
