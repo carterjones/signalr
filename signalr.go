@@ -85,6 +85,10 @@ type Client struct {
 	// Set a maximum number of negotiate retries.
 	MaxNegotiateRetries int
 
+	// The time to wait before retrying, in the event that an error occurs
+	// when contacting the SignalR service.
+	RetryWaitDuration time.Duration
+
 	messages        chan Message
 	connectionToken string
 	connectionID    string
@@ -172,7 +176,7 @@ func (c *Client) Negotiate() (err error) {
 			err = errors.New(resp.Status)
 			trace.Error(err)
 			// Keep trying.
-			time.Sleep(time.Minute)
+			time.Sleep(c.RetryWaitDuration)
 			continue
 		}
 
@@ -452,6 +456,9 @@ func New(host, protocol, endpoint, connectionData string) (c *Client) {
 
 	// Set the default max number of negotiate retries.
 	c.MaxNegotiateRetries = 5
+
+	// Set the default sleep duration between retries.
+	c.RetryWaitDuration = 1 * time.Minute
 
 	return
 }
