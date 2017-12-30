@@ -5,6 +5,9 @@ import (
 	"log"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
+	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -12,6 +15,22 @@ import (
 	"github.com/carterjones/signalr"
 	"github.com/gorilla/websocket"
 )
+
+func equals(tb testing.TB, id string, exp, act interface{}) {
+	if !reflect.DeepEqual(exp, act) {
+		_, file, line, _ := runtime.Caller(1)
+		tb.Errorf("\n\033[31m%s:%d (%s):\n\n\texp: %#v\n\tgot: %#v\033[39m\n\n",
+			filepath.Base(file), line, id, exp, act)
+	}
+}
+
+func notNil(tb testing.TB, id string, act interface{}) {
+	if act == nil {
+		_, file, line, _ := runtime.Caller(1)
+		tb.Errorf("\n\033[31m%s:%d (%s):\n\n\texp: a non-nil value\n\tgot: %#v\033[39m\n\n",
+			filepath.Base(file), line, id, act)
+	}
+}
 
 func negotiate(w http.ResponseWriter, r *http.Request) {
 	_, err := w.Write([]byte(`{"ConnectionToken":"hello world","ConnectionId":"1234-ABC","URL":"/signalr"}`))
@@ -62,7 +81,7 @@ func start(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func TestNew(t *testing.T) {
+func TestNormal(t *testing.T) {
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/negotiate") {
 			negotiate(w, r)
@@ -98,4 +117,24 @@ func TestNew(t *testing.T) {
 	if err != nil {
 		log.Panic(err)
 	}
+}
+
+func TestNew(t *testing.T) {
+	// Define parameter values.
+	host := "test-host"
+	protocol := "test-protocol"
+	endpoint := "test-endpoint"
+	connectionData := "test-connection-data"
+
+	// Create the client.
+	c := signalr.New(host, protocol, endpoint, connectionData)
+
+	// Validate values were set up properly.
+	equals(t, "host", host, c.Host)
+	equals(t, "protocol", protocol, c.Protocol)
+	equals(t, "endpoint", endpoint, c.Endpoint)
+	equals(t, "connection data", connectionData, c.ConnectionData)
+	equals(t, "http client", new(http.Client), c.HTTPClient)
+	equals(t, "scheme", signalr.HTTPS, c.Scheme)
+	notNil(t, "messages", c.Messages())
 }
