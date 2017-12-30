@@ -412,6 +412,12 @@ func (c *Client) readMessages() {
 
 // Send sends a message to the websocket connection.
 func (c *Client) Send(m hubs.ClientMsg) (err error) {
+	if c.Conn == nil {
+		err = errors.New("send: connection not set")
+		trace.Error(err)
+		return
+	}
+
 	err = c.Conn.WriteJSON(m)
 	if err != nil {
 		trace.Error(err)
