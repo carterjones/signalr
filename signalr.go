@@ -242,32 +242,10 @@ func (c *Client) Connect() (conn *websocket.Conn, err error) {
 		TLSClientConfig: c.TLSClientConfig,
 	}
 
-	conn, resp, err := dialer.Dial(u.String(), http.Header{})
+	conn, _, err = dialer.Dial(u.String(), http.Header{})
 	if err != nil {
 		trace.Error(err)
-
-		if err == websocket.ErrBadHandshake {
-			trace.Error(err)
-
-			defer func() {
-				derr := resp.Body.Close()
-				if derr != nil {
-					trace.Error(derr)
-				}
-			}()
-
-			var body []byte
-			body, err = ioutil.ReadAll(resp.Body)
-			if err != nil {
-				trace.Error(err)
-				return
-			}
-
-			err = errors.New(string(body))
-			trace.Error(err)
-
-			return
-		}
+		return
 	}
 
 	// TODO: determine if we need to set the connection ID here.
