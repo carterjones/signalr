@@ -265,6 +265,32 @@ func TestClient_Negotiate(t *testing.T) {
 }
 
 func TestClient_Connect(t *testing.T) {
+	cases := map[string]struct {
+		fn      http.HandlerFunc
+		wantErr string
+	}{
+		"successful connect": {
+			fn: connect,
+		},
+		"generic error": {
+			fn:      throw123Error,
+			wantErr: websocket.ErrBadHandshake.Error(),
+		},
+	}
+
+	for id, tc := range cases {
+		ts := newTestServer(tc.fn, true)
+		defer ts.Close()
+
+		c := newTestClient("", "", "", ts)
+		conn, err := c.Connect()
+
+		if tc.wantErr != "" {
+			errMatches(t, id, err, tc.wantErr)
+		}
+
+		notNil(t, id, conn)
+	}
 }
 
 func TestClient_Start(t *testing.T) {
