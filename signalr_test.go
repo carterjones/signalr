@@ -17,10 +17,14 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+func red(s string) string {
+	return "\033[31m" + s + "\033[39m"
+}
+
 func equals(tb testing.TB, id string, exp, act interface{}) {
 	if !reflect.DeepEqual(exp, act) {
 		_, file, line, _ := runtime.Caller(1)
-		tb.Errorf("\n\033[31m%s:%d (%s):\n\n\texp: %#v\n\tgot: %#v\033[39m\n\n",
+		tb.Errorf(red("%s:%d (%s):\n\texp: %#v\n\tgot: %#v\n"),
 			filepath.Base(file), line, id, exp, act)
 	}
 }
@@ -28,7 +32,7 @@ func equals(tb testing.TB, id string, exp, act interface{}) {
 func notNil(tb testing.TB, id string, act interface{}) {
 	if act == nil {
 		_, file, line, _ := runtime.Caller(1)
-		tb.Errorf("\n\033[31m%s:%d (%s):\n\n\texp: a non-nil value\n\tgot: %#v\033[39m\n\n",
+		tb.Errorf(red("%s:%d (%s):\n\texp: a non-nil value\n\tgot: %#v\n"),
 			filepath.Base(file), line, id, act)
 	}
 }
@@ -42,16 +46,16 @@ func errMatches(tb testing.TB, id string, err error, wantErr interface{}) {
 		}
 
 		if sub, ok := wantErr.(string); ok {
-			tb.Errorf("%s: unexpected success; want error with substring %q", id, sub)
+			tb.Errorf(red("%s | unexpected success; want error with substring %q"), id, sub)
 			return
 		}
 
-		tb.Errorf("%s: unexpected success; want error %v", id, wantErr)
+		tb.Errorf(red("%s | unexpected success; want error %v"), id, wantErr)
 		return
 	}
 
 	if wantErr == nil {
-		tb.Errorf("%s: %v; want success", id, err)
+		tb.Errorf(red("%s | %v; want success"), id, err)
 		return
 	}
 
@@ -59,7 +63,7 @@ func errMatches(tb testing.TB, id string, err error, wantErr interface{}) {
 		if strings.Contains(err.Error(), sub) {
 			return
 		}
-		tb.Errorf("%s, error = %v; want an error with substring %q", id, err, sub)
+		tb.Errorf(red("%s | error = %v; want an error with substring %q"), id, err, sub)
 		return
 	}
 
@@ -67,7 +71,7 @@ func errMatches(tb testing.TB, id string, err error, wantErr interface{}) {
 		return
 	}
 
-	tb.Errorf("%s: %v; want %v", id, err, wantErr)
+	tb.Errorf(red("%s | %v; want %v"), id, err, wantErr)
 }
 
 func hostFromServerURL(url string) (host string) {
