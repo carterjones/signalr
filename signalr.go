@@ -90,8 +90,8 @@ type Client struct {
 	RetryWaitDuration time.Duration
 
 	messages        chan Message
-	connectionToken string
-	connectionID    string
+	ConnectionToken string
+	ConnectionID    string
 }
 
 func (c *Client) makeURL(command string) (u url.URL) {
@@ -109,8 +109,8 @@ func (c *Client) makeURL(command string) (u url.URL) {
 	params.Set("clientProtocol", c.Protocol)
 
 	// Set the connectionToken.
-	if c.connectionToken != "" {
-		params.Set("connectionToken", c.connectionToken)
+	if c.ConnectionToken != "" {
+		params.Set("connectionToken", c.ConnectionToken)
 	}
 
 	switch command {
@@ -142,7 +142,7 @@ func (c *Client) makeURL(command string) (u url.URL) {
 // Negotiate implements the negotiate step of the SignalR connection sequence.
 func (c *Client) Negotiate() (err error) {
 	// Reset the connection token in case it has been set.
-	c.connectionToken = ""
+	c.ConnectionToken = ""
 
 	// Make a "negotiate" URL.
 	u := c.makeURL("negotiate")
@@ -207,8 +207,8 @@ func (c *Client) Negotiate() (err error) {
 		}
 
 		// Set the connection token and ID.
-		c.connectionToken = url.QueryEscape(parsed.ConnectionToken)
-		c.connectionID = parsed.ConnectionID
+		c.ConnectionToken = url.QueryEscape(parsed.ConnectionToken)
+		c.ConnectionID = parsed.ConnectionID
 
 		// Update the protocol version.
 		c.Protocol = parsed.ProtocolVersion
