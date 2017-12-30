@@ -82,6 +82,9 @@ type Client struct {
 	// Either HTTPS or HTTP.
 	Scheme Scheme
 
+	// Set a maximum number of negotiate retries.
+	MaxNegotiateRetries int
+
 	messages        chan Message
 	connectionToken string
 	connectionID    string
@@ -140,7 +143,7 @@ func (c *Client) Negotiate() (err error) {
 	// Make a "negotiate" URL.
 	u := c.makeURL("negotiate")
 
-	for i := 0; i < 5; i++ {
+	for i := 0; i < c.MaxNegotiateRetries; i++ {
 		var resp *http.Response
 		resp, err = c.HTTPClient.Get(u.String())
 		if err != nil {
@@ -446,6 +449,9 @@ func New(host, protocol, endpoint, connectionData string) (c *Client) {
 
 	// Default to using a secure scheme.
 	c.Scheme = HTTPS
+
+	// Set the default max number of negotiate retries.
+	c.MaxNegotiateRetries = 5
 
 	return
 }
