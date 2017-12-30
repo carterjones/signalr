@@ -199,9 +199,12 @@ func (c *Client) Negotiate() (err error) {
 			return
 		}
 
-		// Set the connection token and id.
+		// Set the connection token and ID.
 		c.connectionToken = url.QueryEscape(parsed.ConnectionToken)
 		c.connectionID = parsed.ConnectionID
+
+		// Update the protocol version.
+		c.Protocol = parsed.ProtocolVersion
 
 		// Set the SignalR endpoint.
 		c.Endpoint = parsed.URL
