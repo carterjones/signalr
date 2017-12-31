@@ -2,6 +2,7 @@ package signalr_test
 
 import (
 	"crypto/x509"
+	"errors"
 	"log"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/carterjones/helpers/trace"
 	"github.com/carterjones/signalr"
+	"github.com/carterjones/signalr/hubs"
 	"github.com/gorilla/websocket"
 )
 
@@ -445,8 +447,71 @@ func TestClient_Init(t *testing.T) {
 	// TODO: check for specific errors
 }
 
-func TestClient_Send(t *testing.T) {
+type FakeConn struct {
+	err  error
+	data interface{}
+}
 
+func (c *FakeConn) ReadMessage() (messageType int, p []byte, err error) {
+	return
+}
+
+func (c *FakeConn) WriteJSON(v interface{}) (err error) {
+	// Save the data that is supposedly being written, so it can be
+	// inspected later.
+	c.data = v
+
+	// Prepare the error to be returned.
+	err = c.err
+
+	return
+}
+
+func TestClient_Send(t *testing.T) {
+	cases := map[string]struct {
+		conn    *FakeConn
+		err     error
+		wantErr string
+	}{
+		"successful write": {
+			conn:    new(FakeConn),
+			err:     nil,
+			wantErr: "",
+		},
+		"connection not set": {
+			conn:    nil,
+			err:     nil,
+			wantErr: "send: connection not set",
+		},
+		"write error": {
+			conn:    new(FakeConn),
+			err:     errors.New("test error"),
+			wantErr: "test error",
+		},
+	}
+
+	for id, tc := range cases {
+		// Set up a new test client.
+		c := signalr.New("", "", "", "")
+
+		// Set up a fake connection, if one has been created.
+		if tc.conn != nil {
+			tc.conn.err = tc.err
+			c.Conn = tc.conn
+		}
+
+		// Send the message.
+		data := hubs.ClientMsg{H: "test data 123"}
+		err := c.Send(data)
+
+		// Check the results.
+		if tc.wantErr != "" {
+			errMatches(t, id, err, tc.wantErr)
+		} else {
+			equals(t, id, data, tc.conn.data)
+			ok(t, id, err)
+		}
+	}
 }
 
 func TestNew(t *testing.T) {
