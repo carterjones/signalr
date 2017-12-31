@@ -256,7 +256,7 @@ func TestClient_Negotiate(t *testing.T) {
 		// Set the wait time to milliseconds.
 		c.RetryWaitDuration = 1 * time.Millisecond
 
-		// Perform the negotation.
+		// Perform the negotiation.
 		err := c.Negotiate()
 
 		// Make sure the error matches the expected error.
