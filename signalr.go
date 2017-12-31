@@ -19,6 +19,38 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// MessageReader is the interface that wraps ReadMessage.
+//
+// ReadMessage is defined at
+// https://godoc.org/github.com/gorilla/websocket#Conn.ReadMessage
+//
+// At a high level, it reads messages and returns:
+//  - the type of message read
+//  - the bytes that were read
+//  - any errors encountered during reading the message
+type MessageReader interface {
+	ReadMessage() (messageType int, p []byte, err error)
+}
+
+// JSONWriter is the interface that wraps WriteJSON.
+//
+// WriteJSON is defined at
+// https://godoc.org/github.com/gorilla/websocket#Conn.WriteJSON
+//
+// At a high level, it writes a structure to the underlying websocket and
+// returns any error that was encountered during the write operation.
+type JSONWriter interface {
+	WriteJSON(v interface{}) error
+}
+
+// WebsocketConn is a combination of MessageReader and JSONWriter. It is used to
+// provide an interface to objects that can read from and write to a websocket
+// connection.
+type WebsocketConn interface {
+	MessageReader
+	JSONWriter
+}
+
 // Message represents a message sent from the server to the persistent websocket
 // connection.
 type Message struct {
@@ -71,9 +103,11 @@ type Client struct {
 	// The HTTPClient used to initialize the websocket connection.
 	HTTPClient *http.Client
 
-	// The raw websocket connection that results from a successful
-	// connection to the SignalR server.
-	Conn *websocket.Conn
+	// This field holds a struct that can read messages from and write JSON
+	// objects to a websocket. In practice, this is simply a raw websocket
+	// connection that results from a successful connection to the SignalR
+	// server.
+	Conn WebsocketConn
 
 	// An optional setting to provide a non-default TLS configuration to use
 	// when connecting to the websocket.
@@ -254,7 +288,7 @@ func (c *Client) Connect() (conn *websocket.Conn, err error) {
 }
 
 // Start implements the start step of the SignalR connection sequence.
-func (c *Client) Start(conn *websocket.Conn) (err error) {
+func (c *Client) Start(conn WebsocketConn) (err error) {
 	u := c.makeURL("start")
 
 	resp, err := c.HTTPClient.Get(u.String())
