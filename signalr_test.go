@@ -277,19 +277,26 @@ func TestClient_Negotiate(t *testing.T) {
 func TestClient_Connect(t *testing.T) {
 	cases := map[string]struct {
 		fn      http.HandlerFunc
+		TLS     bool
 		wantErr string
 	}{
-		"successful connect": {
-			fn: connect,
+		"successful https connect": {
+			fn:  connect,
+			TLS: true,
+		},
+		"successful http connect": {
+			fn:  connect,
+			TLS: false,
 		},
 		"generic error": {
 			fn:      throw123Error,
+			TLS:     true,
 			wantErr: websocket.ErrBadHandshake.Error(),
 		},
 	}
 
 	for id, tc := range cases {
-		ts := newTestServer(tc.fn, true)
+		ts := newTestServer(tc.fn, tc.TLS)
 		defer ts.Close()
 
 		c := newTestClient("", "", "", ts)
@@ -399,7 +406,12 @@ func TestClient_Start(t *testing.T) {
 		if tc.wantErr != "" {
 			errMatches(t, id, err, tc.wantErr)
 		} else {
+			// Verify that the connection was properly set.
+			equals(t, id, conn, c.Conn)
+
+			// Verify no error occurred.
 			ok(t, id, err)
+
 		}
 	}
 }
@@ -434,9 +446,7 @@ func TestClient_Init(t *testing.T) {
 }
 
 func TestClient_Send(t *testing.T) {
-}
 
-func TestClient_Messages(t *testing.T) {
 }
 
 func TestNew(t *testing.T) {
