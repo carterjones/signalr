@@ -24,8 +24,16 @@ func red(s string) string {
 func equals(tb testing.TB, id string, exp, act interface{}) {
 	if !reflect.DeepEqual(exp, act) {
 		_, file, line, _ := runtime.Caller(1)
-		tb.Errorf(red("%s:%d (%s):\n\texp: %#v\n\tgot: %#v\n"),
+		tb.Errorf(red("%s:%d %s: \n\texp: %#v\n\tgot: %#v\n"),
 			filepath.Base(file), line, id, exp, act)
+	}
+}
+
+func ok(tb testing.TB, id string, err error) {
+	if err != nil {
+		_, file, line, _ := runtime.Caller(1)
+		tb.Errorf(red("%s:%d %s | unexpected error: %s\n"),
+			filepath.Base(file), line, id, err.Error())
 	}
 }
 
@@ -254,6 +262,8 @@ func TestClient_Negotiate(t *testing.T) {
 		// Make sure the error matches the expected error.
 		if tc.wantErr != "" {
 			errMatches(t, id, err, tc.wantErr)
+		} else {
+			ok(t, id, err)
 		}
 
 		// Validate the things we expect.
@@ -287,6 +297,8 @@ func TestClient_Connect(t *testing.T) {
 
 		if tc.wantErr != "" {
 			errMatches(t, id, err, tc.wantErr)
+		} else {
+			ok(t, id, err)
 		}
 
 		notNil(t, id, conn)
@@ -294,6 +306,102 @@ func TestClient_Connect(t *testing.T) {
 }
 
 func TestClient_Start(t *testing.T) {
+	cases := map[string]struct {
+		startFn   http.HandlerFunc
+		connectFn http.HandlerFunc
+		wantErr   string
+	}{
+		"successful start": {
+			startFn:   start,
+			connectFn: connect,
+		},
+		"failed get request": {
+			startFn:   throwMalformedStatusCodeError,
+			connectFn: connect,
+			wantErr:   "malformed HTTP status code",
+		},
+		"invalid json sent in response to get request": {
+			startFn: func(w http.ResponseWriter, r *http.Request) {
+				w.Write([]byte("invalid json"))
+			},
+			connectFn: connect,
+			wantErr:   "invalid character 'i' looking for beginning of value",
+		},
+		"non-'started' response": {
+			startFn: func(w http.ResponseWriter, r *http.Request) {
+				w.Write([]byte(`{"Response":"not expecting this"}`))
+			},
+			connectFn: connect,
+			wantErr:   "start response is not 'started': not expecting this",
+		},
+		"non-text message from websocket": {
+			startFn: start,
+			connectFn: func(w http.ResponseWriter, r *http.Request) {
+				upgrader := websocket.Upgrader{}
+				c, err := upgrader.Upgrade(w, r, nil)
+				if err != nil {
+					log.Panic(err)
+				}
+				c.WriteMessage(websocket.BinaryMessage, []byte("non-text message"))
+			},
+			wantErr: "unexpected websocket control type",
+		},
+		"invalid json sent in init message": {
+			startFn: start,
+			connectFn: func(w http.ResponseWriter, r *http.Request) {
+				upgrader := websocket.Upgrader{}
+				c, err := upgrader.Upgrade(w, r, nil)
+				if err != nil {
+					log.Panic(err)
+				}
+				c.WriteMessage(websocket.TextMessage, []byte("invalid json"))
+			},
+			wantErr: "invalid character 'i' looking for beginning of value",
+		},
+		"wrong S value from server": {
+			startFn: start,
+			connectFn: func(w http.ResponseWriter, r *http.Request) {
+				upgrader := websocket.Upgrader{}
+				c, err := upgrader.Upgrade(w, r, nil)
+				if err != nil {
+					log.Panic(err)
+				}
+				c.WriteMessage(websocket.TextMessage, []byte(`{"S":3}`))
+			},
+			wantErr: "unexpected S value received from server",
+		},
+	}
+
+	for id, tc := range cases {
+		// Create a test server that is initialized with this test
+		// case's "start handler".
+		ts := newTestServer(func(w http.ResponseWriter, r *http.Request) {
+			if strings.Contains(r.URL.Path, "/start") {
+				tc.startFn(w, r)
+			} else if strings.Contains(r.URL.Path, "/connect") {
+				tc.connectFn(w, r)
+			}
+		}, true)
+		defer ts.Close()
+
+		// Create a test client and establish the initial connection.
+		c := newTestClient("", "", "", ts)
+		conn, err := c.Connect()
+		if err != nil {
+			// If this fails, it is not part of the test, so we
+			// panic here.
+			log.Panic(err)
+		}
+
+		// Execute the start function.
+		err = c.Start(conn)
+
+		if tc.wantErr != "" {
+			errMatches(t, id, err, tc.wantErr)
+		} else {
+			ok(t, id, err)
+		}
+	}
 }
 
 func TestClient_Reconnect(t *testing.T) {
