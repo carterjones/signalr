@@ -126,6 +126,9 @@ type Client struct {
 	messages        chan Message
 	ConnectionToken string
 	ConnectionID    string
+
+	// Header values that should be applied to all HTTP requests.
+	Headers map[string]string
 }
 
 func (c *Client) makeURL(command string) (u url.URL) {
@@ -173,6 +176,21 @@ func (c *Client) makeURL(command string) (u url.URL) {
 	return
 }
 
+func (c *Client) prepareRequest(url string) (req *http.Request, err error) {
+	req, err = http.NewRequest("GET", url, nil)
+	if err != nil {
+		trace.Error(err)
+		return
+	}
+
+	// Add all header values.
+	for k, v := range c.Headers {
+		req.Header.Add(k, v)
+	}
+
+	return
+}
+
 // Negotiate implements the negotiate step of the SignalR connection sequence.
 func (c *Client) Negotiate() (err error) {
 	// Reset the connection token in case it has been set.
@@ -182,8 +200,16 @@ func (c *Client) Negotiate() (err error) {
 	u := c.makeURL("negotiate")
 
 	for i := 0; i < c.MaxNegotiateRetries; i++ {
+		var req *http.Request
+		req, err = c.prepareRequest(u.String())
+		if err != nil {
+			trace.Error(err)
+			return
+		}
+
+		// Perform the request.
 		var resp *http.Response
-		resp, err = c.HTTPClient.Get(u.String())
+		resp, err = c.HTTPClient.Do(req)
 		if err != nil {
 			trace.Error(err)
 			return
@@ -206,9 +232,10 @@ func (c *Client) Negotiate() (err error) {
 			trace.Error(err)
 			return
 		default:
-			// Throw an error, but don't return.
+			// Trace the error, but don't return.
 			err = errors.New(resp.Status)
 			trace.Error(err)
+
 			// Keep trying.
 			time.Sleep(c.RetryWaitDuration)
 			continue
@@ -241,7 +268,7 @@ func (c *Client) Negotiate() (err error) {
 		}
 
 		// Set the connection token and ID.
-		c.ConnectionToken = url.QueryEscape(parsed.ConnectionToken)
+		c.ConnectionToken = parsed.ConnectionToken
 		c.ConnectionID = parsed.ConnectionID
 
 		// Update the protocol version.
@@ -276,7 +303,32 @@ func (c *Client) Connect() (conn *websocket.Conn, err error) {
 		TLSClientConfig: c.TLSClientConfig,
 	}
 
-	conn, _, err = dialer.Dial(u.String(), http.Header{})
+	// Create a header object that contains any cookies that have been set
+	// in prior requests.
+	header := make(http.Header)
+	if c.HTTPClient.Jar != nil {
+		// Make a negotiate URL so we can look up the cookie that was
+		// set on the negotiate request.
+		nu := c.makeURL("negotiate")
+		cookies := ""
+		for _, v := range c.HTTPClient.Jar.Cookies(&nu) {
+			if cookies == "" {
+				cookies += v.Name + "=" + v.Value
+			} else {
+				cookies += "; " + v.Name + "=" + v.Value
+			}
+		}
+
+		header.Add("Cookie", cookies)
+	}
+
+	// Add all the other header values specified by the user.
+	for k, v := range c.Headers {
+		header.Add(k, v)
+	}
+
+	// Perform the connection.
+	conn, _, err = dialer.Dial(u.String(), header)
 	if err != nil {
 		trace.Error(err)
 		return
@@ -291,7 +343,16 @@ func (c *Client) Connect() (conn *websocket.Conn, err error) {
 func (c *Client) Start(conn WebsocketConn) (err error) {
 	u := c.makeURL("start")
 
-	resp, err := c.HTTPClient.Get(u.String())
+	var req *http.Request
+	req, err = c.prepareRequest(u.String())
+	if err != nil {
+		trace.Error(err)
+		return
+	}
+
+	// Perform the request.
+	var resp *http.Response
+	resp, err = c.HTTPClient.Do(req)
 	if err != nil {
 		trace.Error(err)
 		return
@@ -315,6 +376,7 @@ func (c *Client) Start(conn WebsocketConn) (err error) {
 	err = json.Unmarshal(body, &parsed)
 	if err != nil {
 		trace.Error(err)
+		trace.DebugMessage("body: %s", string(body))
 		return
 	}
 
@@ -462,9 +524,10 @@ func New(host, protocol, endpoint, connectionData string) (c *Client) {
 	c.Host = host
 	c.Protocol = protocol
 	c.Endpoint = endpoint
-	c.ConnectionData = url.QueryEscape(connectionData)
+	c.ConnectionData = connectionData
 	c.messages = make(chan Message)
 	c.HTTPClient = new(http.Client)
+	c.Headers = make(map[string]string)
 
 	// Default to using a secure scheme.
 	c.Scheme = HTTPS

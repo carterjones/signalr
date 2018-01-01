@@ -208,7 +208,7 @@ func TestClient_Negotiate(t *testing.T) {
 			exp: signalr.Client{
 				Protocol:        "1337",
 				Endpoint:        "/signalr",
-				ConnectionToken: "hello+world",
+				ConnectionToken: "hello world",
 				ConnectionID:    "1234-ABC",
 			},
 		},
@@ -223,7 +223,7 @@ func TestClient_Negotiate(t *testing.T) {
 			exp: signalr.Client{
 				Protocol:        "1337",
 				Endpoint:        "/signalr",
-				ConnectionToken: "hello+world",
+				ConnectionToken: "hello world",
 				ConnectionID:    "1234-ABC",
 			},
 		},
