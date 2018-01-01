@@ -432,6 +432,7 @@ func (c *Client) Start(conn WebsocketConn) (err error) {
 	if pcm.S != serverInitialized {
 		err = errors.New("unexpected S value received from server: " + strconv.Itoa(pcm.S))
 		trace.Error(err)
+		trace.DebugMessage("message: %s", string(p))
 		return
 	}
 
