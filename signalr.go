@@ -236,10 +236,13 @@ func (c *Client) Negotiate() (err error) {
 		case 200:
 			// Everything worked, so do nothing.
 		case 503:
-			// Bail, since the service is unavailable.
+			// Trace the error, but don't return.
 			err = errors.New(resp.Status)
 			trace.Error(err)
-			return
+
+			// Keep trying.
+			time.Sleep(c.RetryWaitDuration)
+			continue
 		default:
 			// Trace the error, but don't return.
 			err = errors.New(resp.Status)
