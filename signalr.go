@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/carterjones/helpers/trace"
@@ -131,6 +132,16 @@ type Client struct {
 	Headers map[string]string
 }
 
+// Conditionally encrypt the traffic depending on the initial
+// connection's encryption.
+func (c *Client) setWebsocketURLScheme(u *url.URL) {
+	if c.Scheme == HTTPS {
+		u.Scheme = string(WSS)
+	} else {
+		u.Scheme = string(WS)
+	}
+}
+
 func (c *Client) makeURL(command string) (u url.URL) {
 	// Set the host.
 	u.Host = c.Host
@@ -155,15 +166,13 @@ func (c *Client) makeURL(command string) (u url.URL) {
 		u.Scheme = string(c.Scheme)
 		u.Path += "/negotiate"
 	case "connect":
-		// Conditionally encrypt the traffic depending on the initial
-		// connection's encryption.
-		if c.Scheme == HTTPS {
-			u.Scheme = string(WSS)
-		} else {
-			u.Scheme = string(WS)
-		}
+		c.setWebsocketURLScheme(&u)
 		params.Set("transport", "webSockets")
 		u.Path += "/connect"
+	case "reconnect":
+		c.setWebsocketURLScheme(&u)
+		params.Set("transport", "webSockets")
+		u.Path += "/reconnect"
 	case "start":
 		u.Scheme = string(c.Scheme)
 		params.Set("transport", "webSockets")
@@ -283,20 +292,7 @@ func (c *Client) Negotiate() (err error) {
 	return
 }
 
-// Connect implements the connect step of the SignalR connection sequence.
-func (c *Client) Connect() (conn *websocket.Conn, err error) {
-	// Example connect URL:
-	// https://socket.bittrex.com/signalr/connect?
-	//   transport=webSockets&
-	//   clientProtocol=1.5&
-	//   connectionToken=<token>&
-	//   connectionData=%5B%7B%22name%22%3A%22corehub%22%7D%5D&
-	//   tid=5
-	// -> returns connection ID. (e.g.: d-F2577E41-B,0|If60z,0|If600,1)
-
-	// Create the URL.
-	u := c.makeURL("connect")
-
+func (c *Client) xconnect(u url.URL) (conn *websocket.Conn, err error) {
 	// Create a dialer that uses the supplied TLS client configuration.
 	dialer := &websocket.Dialer{
 		Proxy:           http.ProxyFromEnvironment,
@@ -331,10 +327,30 @@ func (c *Client) Connect() (conn *websocket.Conn, err error) {
 	conn, _, err = dialer.Dial(u.String(), header)
 	if err != nil {
 		trace.Error(err)
-		return
 	}
 
-	// TODO: determine if we need to set the connection ID here.
+	return
+}
+
+// Connect implements the connect step of the SignalR connection sequence.
+func (c *Client) Connect() (conn *websocket.Conn, err error) {
+	// Example connect URL:
+	// https://socket.bittrex.com/signalr/connect?
+	//   transport=webSockets&
+	//   clientProtocol=1.5&
+	//   connectionToken=<token>&
+	//   connectionData=%5B%7B%22name%22%3A%22corehub%22%7D%5D&
+	//   tid=5
+	// -> returns connection ID. (e.g.: d-F2577E41-B,0|If60z,0|If600,1)
+
+	// Create the URL.
+	u := c.makeURL("connect")
+
+	// Perform the connection.
+	conn, err = c.xconnect(u)
+	if err != nil {
+		trace.Error(err)
+	}
 
 	return
 }
@@ -423,7 +439,7 @@ func (c *Client) Start(conn WebsocketConn) (err error) {
 }
 
 // Reconnect implements the reconnect step of the SignalR connection sequence.
-func (c *Client) Reconnect() {
+func (c *Client) Reconnect() (conn *websocket.Conn, err error) {
 	// Note from
 	// https://blog.3d-logic.com/2015/03/29/signalr-on-the-wire-an-informal-description-of-the-signalr-protocol/
 	// Once the channel is set up there are no further HTTP requests until
@@ -440,6 +456,17 @@ func (c *Client) Reconnect() {
 	//   connectionData=%5B%7B%22name%22%3A%22corehub%22%7D%5D&
 	//   tid=7
 	// Note: messageId matches connection ID returned from the connect request
+
+	// Create the URL.
+	u := c.makeURL("reconnect")
+
+	// Perform the connection.
+	conn, err = c.xconnect(u)
+	if err != nil {
+		trace.Error(err)
+	}
+
+	return
 }
 
 // Init connects to the host and performs the websocket initialization routines
@@ -473,8 +500,32 @@ func (c *Client) Init() (err error) {
 func (c *Client) readMessages() {
 	for {
 		_, p, err := c.Conn.ReadMessage()
+
 		if err != nil {
 			trace.Error(err)
+
+			// Handle various types of errors.
+			if strings.Contains(err.Error(), "websocket: close 1006 (abnormal closure)") {
+				// Attempt to reconnect until success. If at
+				// first you don't succeed, try the same thing
+				// over and over and over and over and over...
+				for {
+					_, ierr := c.Reconnect()
+					if err != nil {
+						trace.Error(ierr)
+						continue
+					}
+
+					break
+				}
+
+				// Once successfully reconnected, start the read
+				// message loop again.
+				go c.readMessages()
+				return
+			}
+
+			// Default behavior is to just return.
 			return
 		}
 
