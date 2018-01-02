@@ -517,12 +517,14 @@ func (c *Client) readMessages() {
 				// first you don't succeed, try the same thing
 				// over and over and over and over and over...
 				for {
+					trace.DebugMessage("attempting to reconnect...")
 					_, ierr := c.Reconnect()
 					if ierr != nil {
 						trace.Error(ierr)
 						continue
 					}
 
+					trace.DebugMessage("reconnected successfully")
 					break
 				}
 
