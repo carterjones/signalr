@@ -515,7 +515,7 @@ func (c *Client) readMessages() {
 				// over and over and over and over and over...
 				for {
 					_, ierr := c.Reconnect()
-					if err != nil {
+					if ierr != nil {
 						trace.Error(ierr)
 						continue
 					}
