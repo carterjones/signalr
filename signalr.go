@@ -295,7 +295,7 @@ func (c *Client) Negotiate() (err error) {
 	return
 }
 
-func (c *Client) xconnect(u url.URL) (conn *websocket.Conn, err error) {
+func (c *Client) xconnect(url string) (conn *websocket.Conn, err error) {
 	// Create a dialer that uses the supplied TLS client configuration.
 	dialer := &websocket.Dialer{
 		Proxy:           http.ProxyFromEnvironment,
@@ -327,7 +327,7 @@ func (c *Client) xconnect(u url.URL) (conn *websocket.Conn, err error) {
 	}
 
 	// Perform the connection.
-	conn, _, err = dialer.Dial(u.String(), header)
+	conn, _, err = dialer.Dial(url, header)
 	if err != nil {
 		trace.Error(err)
 	}
@@ -350,7 +350,7 @@ func (c *Client) Connect() (conn *websocket.Conn, err error) {
 	u := c.makeURL("connect")
 
 	// Perform the connection.
-	conn, err = c.xconnect(u)
+	conn, err = c.xconnect(u.String())
 	if err != nil {
 		trace.Error(err)
 	}
@@ -464,8 +464,8 @@ func (c *Client) Reconnect() (conn *websocket.Conn, err error) {
 	// Create the URL.
 	u := c.makeURL("reconnect")
 
-	// Perform the connection.
-	conn, err = c.xconnect(u)
+	// Perform the reconnection.
+	conn, err = c.xconnect(u.String())
 	if err != nil {
 		trace.Error(err)
 	}
