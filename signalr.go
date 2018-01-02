@@ -470,6 +470,9 @@ func (c *Client) Reconnect() (conn *websocket.Conn, err error) {
 		trace.Error(err)
 	}
 
+	// Once complete, set the new connection for this client.
+	c.Conn = conn
+
 	return
 }
 
