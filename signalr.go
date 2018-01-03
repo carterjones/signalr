@@ -240,7 +240,7 @@ func (c *Client) Negotiate() (err error) {
 			// Trace the error, but don't return.
 			err = errors.New(resp.Status)
 			trace.Error(err)
-			log.DebugMessage("attempting to retry the negotiation...")
+			trace.DebugMessage("attempting to retry the negotiation...")
 
 			// Keep trying.
 			time.Sleep(c.RetryWaitDuration)
@@ -249,7 +249,7 @@ func (c *Client) Negotiate() (err error) {
 			// Trace the error, but don't return.
 			err = errors.New(resp.Status)
 			trace.Error(err)
-			log.DebugMessage("attempting to retry the negotiation...")
+			trace.DebugMessage("attempting to retry the negotiation...")
 
 			// Keep trying.
 			time.Sleep(c.RetryWaitDuration)
