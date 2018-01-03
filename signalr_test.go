@@ -538,7 +538,7 @@ func TestNew(t *testing.T) {
 	equals(t, "http client", new(http.Client), c.HTTPClient)
 	equals(t, "scheme", signalr.HTTPS, c.Scheme)
 	equals(t, "max negotiate retries", 5, c.MaxNegotiateRetries)
-	equals(t, "max negotiate retries", 5, c.MaxConnectRetries)
+	equals(t, "max connect retries", 5, c.MaxConnectRetries)
 	equals(t, "retry wait duration", 1*time.Minute, c.RetryWaitDuration)
 	notNil(t, "messages", c.Messages())
 }
