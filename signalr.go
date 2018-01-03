@@ -330,19 +330,24 @@ func (c *Client) xconnect(url string) (conn *websocket.Conn, err error) {
 	// Perform the connection.
 	for i := 0; i < c.MaxConnectRetries; i++ {
 		conn, _, err = dialer.Dial(url, header)
+		if err == nil {
+			// If there was no error, break out of the retry loop.
+			break
+		}
+
+		// Log the error.
+		trace.Error(err)
+
+		// Handle any specific errors.
 		if err == websocket.ErrBadHandshake {
 			// Wait and retry the connection in the event of a bad
 			// handshake.
 			time.Sleep(c.RetryWaitDuration)
 			continue
-		} else if err != nil {
-			trace.Error(err)
-			return
 		}
 
-		// If we got here, there is no error, so we can break out of the
-		// retry loop.
-		break
+		// Return in the event that no specific error was encountered.
+		return
 	}
 
 	return
