@@ -209,6 +209,9 @@ func (c *Client) Negotiate() (err error) {
 	// Make a "negotiate" URL.
 	u := c.makeURL("negotiate")
 
+	// Make a flag to use for indicating whether or not an error occurred.
+	errOccurred := false
+
 	for i := 0; i < c.MaxNegotiateRetries; i++ {
 		var req *http.Request
 		req, err = c.prepareRequest(u.String())
@@ -241,6 +244,7 @@ func (c *Client) Negotiate() (err error) {
 			err = errors.New(resp.Status)
 			trace.Error(err)
 			trace.DebugMessage("attempting to retry the negotiation...")
+			errOccurred = true
 
 			// Keep trying.
 			time.Sleep(c.RetryWaitDuration)
@@ -250,6 +254,7 @@ func (c *Client) Negotiate() (err error) {
 			err = errors.New(resp.Status)
 			trace.Error(err)
 			trace.DebugMessage("attempting to retry the negotiation...")
+			errOccurred = true
 
 			// Keep trying.
 			time.Sleep(c.RetryWaitDuration)
@@ -282,6 +287,13 @@ func (c *Client) Negotiate() (err error) {
 			return
 		}
 
+		if errOccurred {
+			// If an error ocurred earlier, and yet we got here,
+			// then we want to let the user know that the
+			// negotiation successfully recovered.
+			trace.DebugMessage("the negotiate retry was successful")
+		}
+
 		// Set the connection token and ID.
 		c.ConnectionToken = parsed.ConnectionToken
 		c.ConnectionID = parsed.ConnectionID
@@ -293,6 +305,10 @@ func (c *Client) Negotiate() (err error) {
 		c.Endpoint = parsed.URL
 
 		return
+	}
+
+	if errOccurred {
+		trace.DebugMessage("the negotiate retry was unsuccessful")
 	}
 
 	return
