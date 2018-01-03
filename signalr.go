@@ -119,6 +119,7 @@ type Client struct {
 
 	// Set a maximum number of negotiate retries.
 	MaxNegotiateRetries int
+	MaxConnectRetries   int
 
 	// The time to wait before retrying, in the event that an error occurs
 	// when contacting the SignalR service.
@@ -327,9 +328,21 @@ func (c *Client) xconnect(url string) (conn *websocket.Conn, err error) {
 	}
 
 	// Perform the connection.
-	conn, _, err = dialer.Dial(url, header)
-	if err != nil {
-		trace.Error(err)
+	for i := 0; i < c.MaxConnectRetries; i++ {
+		conn, _, err = dialer.Dial(url, header)
+		if err == websocket.ErrBadHandshake {
+			// Wait and retry the connection in the event of a bad
+			// handshake.
+			time.Sleep(c.RetryWaitDuration)
+			continue
+		} else if err != nil {
+			trace.Error(err)
+			return
+		}
+
+		// If we got here, there is no error, so we can break out of the
+		// retry loop.
+		break
 	}
 
 	return
@@ -594,6 +607,9 @@ func New(host, protocol, endpoint, connectionData string) (c *Client) {
 
 	// Set the default max number of negotiate retries.
 	c.MaxNegotiateRetries = 5
+
+	// Set the default max number of connect retries.
+	c.MaxConnectRetries = 5
 
 	// Set the default sleep duration between retries.
 	c.RetryWaitDuration = 1 * time.Minute
