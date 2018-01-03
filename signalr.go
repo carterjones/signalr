@@ -123,6 +123,9 @@ type Client struct {
 	// The maximum number of times to re-attempt a connection.
 	MaxConnectRetries int
 
+	// The maximum number of times to re-attempt a reconnection.
+	MaxReconnectRetries int
+
 	// The time to wait before retrying, in the event that an error occurs
 	// when contacting the SignalR service.
 	RetryWaitDuration time.Duration
@@ -542,6 +545,34 @@ func (c *Client) Init() (err error) {
 	return
 }
 
+func (c *Client) attemptReconnect() (err error) {
+	// Attempt to reconnect in a retry loop.
+	reconnected := false
+	for i := 0; i < c.MaxReconnectRetries; i++ {
+		trace.DebugMessage("attempting to reconnect...")
+		_, ierr := c.Reconnect()
+		if ierr != nil {
+			trace.Error(ierr)
+			continue
+		}
+
+		trace.DebugMessage("reconnected successfully")
+		reconnected = true
+		break
+	}
+
+	// If the reconnect attempt succeeded, start the read message loop
+	// again and then exit.
+	if reconnected {
+		go c.readMessages()
+		return
+	}
+
+	// If the reconnect attempt failed, retry the init sequence again.
+	err = c.Init()
+	return
+}
+
 func (c *Client) readMessages() {
 	for {
 		_, p, err := c.Conn.ReadMessage()
@@ -551,24 +582,16 @@ func (c *Client) readMessages() {
 
 			// Handle various types of errors.
 			if strings.Contains(err.Error(), "websocket: close 1006 (abnormal closure)") {
-				// Attempt to reconnect until success. If at
-				// first you don't succeed, try the same thing
-				// over and over and over and over and over...
-				for {
-					trace.DebugMessage("attempting to reconnect...")
-					_, ierr := c.Reconnect()
-					if ierr != nil {
-						trace.Error(ierr)
-						continue
-					}
-
-					trace.DebugMessage("reconnected successfully")
-					break
+				// Try to reconnect.
+				err = c.attemptReconnect()
+				if err != nil {
+					trace.Error(err)
 				}
 
-				// Once successfully reconnected, start the read
-				// message loop again.
-				go c.readMessages()
+				// At this point, we have either failed to
+				// reconnect or have succeeded. In either case,
+				// this connection is no longer used, so we
+				// return.
 				return
 			}
 
@@ -635,6 +658,9 @@ func New(host, protocol, endpoint, connectionData string) (c *Client) {
 
 	// Set the default max number of connect retries.
 	c.MaxConnectRetries = 5
+
+	// Set the default max number of reconnect retries.
+	c.MaxReconnectRetries = 5
 
 	// Set the default sleep duration between retries.
 	c.RetryWaitDuration = 1 * time.Minute
