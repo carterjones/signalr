@@ -401,6 +401,11 @@ func TestClient_Start(t *testing.T) {
 
 		// Create a test client and establish the initial connection.
 		c := newTestClient("", "", "", ts)
+
+		// Set the wait time to milliseconds.
+		c.RetryWaitDuration = 1 * time.Millisecond
+
+		// Perform the connection.
 		conn, err := c.Connect()
 		if err != nil {
 			// If this fails, it is not part of the test, so we
@@ -540,6 +545,7 @@ func TestNew(t *testing.T) {
 	equals(t, "max negotiate retries", 5, c.MaxNegotiateRetries)
 	equals(t, "max connect retries", 5, c.MaxConnectRetries)
 	equals(t, "max reconnect retries", 5, c.MaxReconnectRetries)
+	equals(t, "max start retries", 5, c.MaxStartRetries)
 	equals(t, "retry wait duration", 1*time.Minute, c.RetryWaitDuration)
 	notNil(t, "messages", c.Messages())
 }

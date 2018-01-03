@@ -126,6 +126,9 @@ type Client struct {
 	// The maximum number of times to re-attempt a reconnection.
 	MaxReconnectRetries int
 
+	// The maximum number of times to re-attempt a start command.
+	MaxStartRetries int
+
 	// The time to wait before retrying, in the event that an error occurs
 	// when contacting the SignalR service.
 	RetryWaitDuration time.Duration
@@ -400,7 +403,9 @@ func (c *Client) Connect() (conn *websocket.Conn, err error) {
 }
 
 // Start implements the start step of the SignalR connection sequence.
-func (c *Client) Start(conn WebsocketConn) (err error) {
+//
+// TODO(carter): reduce the cyclomatic complexity of this function
+func (c *Client) Start(conn WebsocketConn) (err error) { // nolint: gocyclo
 	u := c.makeURL("start")
 
 	var req *http.Request
@@ -410,9 +415,24 @@ func (c *Client) Start(conn WebsocketConn) (err error) {
 		return
 	}
 
-	// Perform the request.
+	// Perform the request in a retry loop.
 	var resp *http.Response
-	resp, err = c.HTTPClient.Do(req)
+	for i := 0; i < c.MaxStartRetries; i++ {
+		resp, err = c.HTTPClient.Do(req)
+
+		// Exit the retry loop if the request was successful.
+		if err == nil {
+			break
+		}
+
+		// If the request was unsuccessful, trace the error, sleep, and then retry.
+		trace.Error(err)
+
+		// Wait and retry.
+		time.Sleep(c.RetryWaitDuration)
+	}
+
+	// If an error ocurred on the last retry, then return.
 	if err != nil {
 		trace.Error(err)
 		return
@@ -661,6 +681,9 @@ func New(host, protocol, endpoint, connectionData string) (c *Client) {
 
 	// Set the default max number of reconnect retries.
 	c.MaxReconnectRetries = 5
+
+	// Set the default max number of start retries.
+	c.MaxStartRetries = 5
 
 	// Set the default sleep duration between retries.
 	c.RetryWaitDuration = 1 * time.Minute
