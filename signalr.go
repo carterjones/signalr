@@ -240,6 +240,7 @@ func (c *Client) Negotiate() (err error) {
 			// Trace the error, but don't return.
 			err = errors.New(resp.Status)
 			trace.Error(err)
+			log.DebugMessage("attempting to retry the negotiation...")
 
 			// Keep trying.
 			time.Sleep(c.RetryWaitDuration)
@@ -248,6 +249,7 @@ func (c *Client) Negotiate() (err error) {
 			// Trace the error, but don't return.
 			err = errors.New(resp.Status)
 			trace.Error(err)
+			log.DebugMessage("attempting to retry the negotiation...")
 
 			// Keep trying.
 			time.Sleep(c.RetryWaitDuration)
@@ -327,7 +329,7 @@ func (c *Client) xconnect(url string) (conn *websocket.Conn, err error) {
 		header.Add(k, v)
 	}
 
-	// Perform the connection.
+	// Perform the connection in a retry loop.
 	for i := 0; i < c.MaxConnectRetries; i++ {
 		conn, _, err = dialer.Dial(url, header)
 		if err == nil {
