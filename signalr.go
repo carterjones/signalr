@@ -117,9 +117,11 @@ type Client struct {
 	// Either HTTPS or HTTP.
 	Scheme Scheme
 
-	// Set a maximum number of negotiate retries.
+	// The maximum number of times to re-attempt a negotiation.
 	MaxNegotiateRetries int
-	MaxConnectRetries   int
+
+	// The maximum number of times to re-attempt a connection.
+	MaxConnectRetries int
 
 	// The time to wait before retrying, in the event that an error occurs
 	// when contacting the SignalR service.
