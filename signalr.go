@@ -593,6 +593,10 @@ func (c *Client) attemptReconnect() (err error) {
 	return
 }
 
+func errMatches(err error, s string) bool {
+	return strings.Contains(err.Error(), s)
+}
+
 func (c *Client) readMessages() {
 	for {
 		_, p, err := c.Conn.ReadMessage()
@@ -601,7 +605,8 @@ func (c *Client) readMessages() {
 			trace.Error(err)
 
 			// Handle various types of errors.
-			if strings.Contains(err.Error(), "websocket: close 1006 (abnormal closure)") {
+			// https://tools.ietf.org/html/rfc6455#section-7.4.1
+			if errMatches(err, "websocket: close 1006 (abnormal closure)") {
 				// Try to reconnect.
 				err = c.attemptReconnect()
 				if err != nil {
@@ -612,6 +617,13 @@ func (c *Client) readMessages() {
 				// reconnect or have succeeded. In either case,
 				// this connection is no longer used, so we
 				// return.
+				return
+			} else if errMatches(err, "websocket: close 1001 (going away)") {
+				// Try to reconnect.
+				err = c.attemptReconnect()
+				if err != nil {
+					trace.Error(err)
+				}
 				return
 			}
 
