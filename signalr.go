@@ -355,25 +355,31 @@ func (c *Client) xconnect(url string) (conn *websocket.Conn, err error) {
 
 	// Perform the connection in a retry loop.
 	for i := 0; i < c.MaxConnectRetries; i++ {
-		conn, _, err = dialer.Dial(url, header)
+		var resp *http.Response
+		conn, resp, err = dialer.Dial(url, header)
 		if err == nil {
 			// If there was no error, break out of the retry loop.
 			break
 		}
 
-		// Log the error.
+		// Log the error. According to documentation at
+		// https://godoc.org/github.com/gorilla/websocket#Dialer.Dial
+		// ErrBadHandshake is the only error returned. Details reside in
+		// the response, so that's how we process this error.
+		err = errors.New(err.Error() + ": " + resp.Status)
 		trace.Error(err)
 
 		// Handle any specific errors.
-		if err == websocket.ErrBadHandshake {
-			// Wait and retry the connection in the event of a bad
-			// handshake.
+		switch resp.StatusCode {
+		case 503:
+			// Wait and retry.
 			time.Sleep(c.RetryWaitDuration)
 			continue
+		default:
+			// Return in the event that no specific error was
+			// encountered.
+			return
 		}
-
-		// Return in the event that no specific error was encountered.
-		return
 	}
 
 	return

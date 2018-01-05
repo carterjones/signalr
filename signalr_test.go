@@ -184,6 +184,11 @@ func throw123Error(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("123 error"))
 }
 
+func throw404Error(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotFound)
+	w.Write([]byte("404 error"))
+}
+
 func throwMalformedStatusCodeError(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(9001)
 	w.Write([]byte("malformed status code"))
@@ -290,10 +295,15 @@ func TestClient_Connect(t *testing.T) {
 			fn:  connect,
 			TLS: false,
 		},
-		"bad handshake error": {
-			fn:      throw123Error,
+		"service not available": {
+			fn:      throw503Error,
 			TLS:     true,
 			wantErr: websocket.ErrBadHandshake.Error(),
+		},
+		"generic error": {
+			fn:      throw404Error,
+			TLS:     true,
+			wantErr: "websocket: bad handshake: 404 Not Found",
 		},
 	}
 
