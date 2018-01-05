@@ -299,7 +299,7 @@ func (c *Client) Negotiate() (err error) {
 		}
 
 		if errOccurred {
-			// If an error ocurred earlier, and yet we got here,
+			// If an error occurred earlier, and yet we got here,
 			// then we want to let the user know that the
 			// negotiation successfully recovered.
 			trace.DebugMessage("the negotiate retry was successful")
@@ -447,7 +447,7 @@ func (c *Client) Start(conn WebsocketConn) (err error) { // nolint: gocyclo
 		time.Sleep(c.RetryWaitDuration)
 	}
 
-	// If an error ocurred on the last retry, then return.
+	// If an error occurred on the last retry, then return.
 	if err != nil {
 		trace.Error(err)
 		return
