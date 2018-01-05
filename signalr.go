@@ -133,7 +133,10 @@ type Client struct {
 	// when contacting the SignalR service.
 	RetryWaitDuration time.Duration
 
-	messages        chan Message
+	messages chan Message
+	errs     chan error
+	done     chan bool
+
 	ConnectionToken string
 	ConnectionID    string
 
@@ -360,6 +363,12 @@ func (c *Client) xconnect(url string) (conn *websocket.Conn, err error) {
 		if err == nil {
 			// If there was no error, break out of the retry loop.
 			break
+		}
+
+		// Verify that a response accompanies the error.
+		if resp == nil {
+			err = errors.New(err.Error() + ", but no response received")
+			return
 		}
 
 		// Log the error. According to documentation at
@@ -605,51 +614,68 @@ func errMatches(err error, s string) bool {
 
 func (c *Client) readMessages() {
 	for {
-		_, p, err := c.Conn.ReadMessage()
+		// Prepare channels for the select statement later.
+		pCh := make(chan []byte)
+		errCh := make(chan error)
 
-		if err != nil {
+		// Wait for a message.
+		go func() {
+			_, p, err := c.Conn.ReadMessage()
+			if err != nil {
+				errCh <- err
+			} else {
+				pCh <- p
+			}
+		}()
+
+		select {
+		case err := <-errCh:
 			trace.Error(err)
-
 			// Handle various types of errors.
 			// https://tools.ietf.org/html/rfc6455#section-7.4.1
-			if errMatches(err, "websocket: close 1006 (abnormal closure)") {
-				// Try to reconnect.
+			if errMatches(err, "websocket: close 1001 (going away)") {
 				err = c.attemptReconnect()
 				if err != nil {
 					trace.Error(err)
+					c.errs <- err
 				}
-
-				// At this point, we have either failed to
-				// reconnect or have succeeded. In either case,
-				// this connection is no longer used, so we
+				// The connection is closed or replaced, so we
 				// return.
 				return
-			} else if errMatches(err, "websocket: close 1001 (going away)") {
-				// Try to reconnect.
+			} else if errMatches(err, "websocket: close 1006 (abnormal closure)") {
 				err = c.attemptReconnect()
 				if err != nil {
 					trace.Error(err)
+					c.errs <- err
 				}
+
+				// The connection is closed or replaced, so we
+				// return.
 				return
 			}
 
 			// Default behavior is to just return.
+			c.errs <- err
+			return
+		case p := <-pCh:
+			// Ignore KeepAlive messages.
+			if string(p) == "{}" {
+				continue
+			}
+
+			var msg Message
+			var err error
+			err = json.Unmarshal(p, &msg)
+			if err != nil {
+				trace.Error(err)
+				c.errs <- err
+				return
+			}
+
+			c.messages <- msg
+		case <-c.done:
 			return
 		}
-
-		// Ignore KeepAlive messages.
-		if string(p) == "{}" {
-			continue
-		}
-
-		var msg Message
-		err = json.Unmarshal(p, &msg)
-		if err != nil {
-			trace.Error(err)
-			return
-		}
-
-		c.messages <- msg
 	}
 }
 
@@ -677,6 +703,17 @@ func (c *Client) Messages() <-chan Message {
 	return c.messages
 }
 
+// Errors returns the channel that reports any errors that were encountered
+// while reading from the underlying websocket connection.
+func (c *Client) Errors() <-chan error {
+	return c.errs
+}
+
+// Close sends a signal to shut down the connection.
+func (c *Client) Close() {
+	c.done <- true
+}
+
 // New creates and initializes a SignalR client.
 func New(host, protocol, endpoint, connectionData string) (c *Client) {
 	c = new(Client)
@@ -685,6 +722,8 @@ func New(host, protocol, endpoint, connectionData string) (c *Client) {
 	c.Endpoint = endpoint
 	c.ConnectionData = connectionData
 	c.messages = make(chan Message)
+	c.errs = make(chan error)
+	c.done = make(chan bool)
 	c.HTTPClient = new(http.Client)
 	c.Headers = make(map[string]string)
 
