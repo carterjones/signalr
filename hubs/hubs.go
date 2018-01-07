@@ -6,9 +6,8 @@ package hubs
 
 import (
 	"encoding/json"
-	"errors"
 
-	"github.com/carterjones/helpers/trace"
+	"github.com/pkg/errors"
 )
 
 // ClientMsg represents a message sent to the Hubs API from the client.
@@ -44,7 +43,6 @@ func (cm *ClientMsg) MarshalJSON() (buf []byte, err error) {
 			args = append(args, []byte(a.(string))...)
 		default:
 			err = errors.New("unsupported argument type")
-			trace.Error(err)
 			return
 		}
 	}

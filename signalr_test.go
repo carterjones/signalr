@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/carterjones/helpers/trace"
 	"github.com/carterjones/signalr"
 	"github.com/carterjones/signalr/hubs"
 	"github.com/gorilla/websocket"
@@ -129,8 +128,7 @@ func newTestClient(protocol, endpoint, connectionData string, ts *httptest.Serve
 func negotiate(w http.ResponseWriter, r *http.Request) {
 	_, err := w.Write([]byte(`{"ConnectionToken":"hello world","ConnectionId":"1234-ABC","URL":"/signalr","ProtocolVersion":"1337"}`))
 	if err != nil {
-		trace.Error(err)
-		return
+		log.Panic(err)
 	}
 }
 
@@ -138,8 +136,7 @@ func connect(w http.ResponseWriter, r *http.Request) {
 	upgrader := websocket.Upgrader{}
 	c, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		trace.Error(err)
-		return
+		log.Panic(err)
 	}
 
 	go func() {
@@ -148,7 +145,6 @@ func connect(w http.ResponseWriter, r *http.Request) {
 			var bs []byte
 			msgType, bs, err = c.ReadMessage()
 			if err != nil {
-				trace.Error(err)
 				return
 			}
 
@@ -160,7 +156,6 @@ func connect(w http.ResponseWriter, r *http.Request) {
 		for {
 			err = c.WriteMessage(websocket.TextMessage, []byte(`{"S":1}`))
 			if err != nil {
-				trace.Error(err)
 				return
 			}
 		}
@@ -170,7 +165,7 @@ func connect(w http.ResponseWriter, r *http.Request) {
 func start(w http.ResponseWriter, r *http.Request) {
 	_, err := w.Write([]byte(`{"Response":"started"}`))
 	if err != nil {
-		trace.Error(err)
+		log.Panic(err)
 	}
 }
 
