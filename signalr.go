@@ -7,17 +7,16 @@ package signalr
 import (
 	"crypto/tls"
 	"encoding/json"
-	"errors"
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/carterjones/helpers/trace"
 	"github.com/carterjones/signalr/hubs"
 	"github.com/gorilla/websocket"
+	"github.com/pkg/errors"
 )
 
 // MessageReader is the interface that wraps ReadMessage.
@@ -200,7 +199,7 @@ func (c *Client) makeURL(command string) (u url.URL) {
 func (c *Client) prepareRequest(url string) (req *http.Request, err error) {
 	req, err = http.NewRequest("GET", url, nil)
 	if err != nil {
-		trace.Error(err)
+		err = errors.Wrap(err, "get request failed")
 		return
 	}
 
@@ -227,7 +226,7 @@ func (c *Client) Negotiate() (err error) {
 		var req *http.Request
 		req, err = c.prepareRequest(u.String())
 		if err != nil {
-			trace.Error(err)
+			err = errors.Wrap(err, "request preparation failed")
 			return
 		}
 
@@ -235,14 +234,14 @@ func (c *Client) Negotiate() (err error) {
 		var resp *http.Response
 		resp, err = c.HTTPClient.Do(req)
 		if err != nil {
-			trace.Error(err)
+			err = errors.Wrap(err, "request failed")
 			return
 		}
 
 		defer func() {
 			derr := resp.Body.Close()
 			if derr != nil {
-				trace.Error(derr)
+				err = errors.Wrap(err, derr.Error())
 			}
 		}()
 
@@ -251,23 +250,15 @@ func (c *Client) Negotiate() (err error) {
 		case 200:
 			// Everything worked, so do nothing.
 		case 503:
-			// Trace the error, but don't return.
-			err = errors.New(resp.Status)
-			trace.Error(err)
-			trace.DebugMessage("attempting to retry the negotiation...")
+			err = errors.Errorf("request failed: %s", resp.Status)
+			trace.DebugMessage("negotiate: retrying after %s", resp.Status)
 			errOccurred = true
-
-			// Keep trying.
 			time.Sleep(c.RetryWaitDuration)
 			continue
 		default:
-			// Trace the error, but don't return.
-			err = errors.New(resp.Status)
-			trace.Error(err)
-			trace.DebugMessage("attempting to retry the negotiation...")
+			err = errors.Errorf("request failed: %s", resp.Status)
+			trace.DebugMessage("negotiate: retrying after %s", resp.Status)
 			errOccurred = true
-
-			// Keep trying.
 			time.Sleep(c.RetryWaitDuration)
 			continue
 		}
@@ -275,7 +266,7 @@ func (c *Client) Negotiate() (err error) {
 		var body []byte
 		body, err = ioutil.ReadAll(resp.Body)
 		if err != nil {
-			trace.Error(err)
+			err = errors.Wrap(err, "read failed")
 			return
 		}
 
@@ -294,7 +285,7 @@ func (c *Client) Negotiate() (err error) {
 		}{}
 		err = json.Unmarshal(body, &parsed)
 		if err != nil {
-			trace.Error(err)
+			err = errors.Wrap(err, "json unmarshal failed")
 			return
 		}
 
@@ -371,12 +362,11 @@ func (c *Client) xconnect(url string) (conn *websocket.Conn, err error) {
 			return
 		}
 
-		// Log the error. According to documentation at
+		// According to documentation at
 		// https://godoc.org/github.com/gorilla/websocket#Dialer.Dial
 		// ErrBadHandshake is the only error returned. Details reside in
 		// the response, so that's how we process this error.
-		err = errors.New(err.Error() + ": " + resp.Status)
-		trace.Error(err)
+		err = errors.Wrap(err, resp.Status)
 
 		// Handle any specific errors.
 		switch resp.StatusCode {
@@ -411,7 +401,7 @@ func (c *Client) Connect() (conn *websocket.Conn, err error) {
 	// Perform the connection.
 	conn, err = c.xconnect(u.String())
 	if err != nil {
-		trace.Error(err)
+		err = errors.Wrap(err, "xkconnect failed")
 	}
 
 	return
@@ -426,7 +416,7 @@ func (c *Client) Start(conn WebsocketConn) (err error) { // nolint: gocyclo
 	var req *http.Request
 	req, err = c.prepareRequest(u.String())
 	if err != nil {
-		trace.Error(err)
+		err = errors.Wrap(err, "request preparation failed")
 		return
 	}
 
@@ -440,8 +430,9 @@ func (c *Client) Start(conn WebsocketConn) (err error) { // nolint: gocyclo
 			break
 		}
 
-		// If the request was unsuccessful, trace the error, sleep, and then retry.
-		trace.Error(err)
+		// If the request was unsuccessful, wrap the error, sleep, and
+		// then retry.
+		err = errors.Wrapf(err, "request failed (%d)", i)
 
 		// Wait and retry.
 		time.Sleep(c.RetryWaitDuration)
@@ -449,20 +440,20 @@ func (c *Client) Start(conn WebsocketConn) (err error) { // nolint: gocyclo
 
 	// If an error occurred on the last retry, then return.
 	if err != nil {
-		trace.Error(err)
+		err = errors.Wrap(err, "all request retries failed")
 		return
 	}
 
 	defer func() {
 		derr := resp.Body.Close()
 		if derr != nil {
-			trace.Error(derr)
+			err = errors.Wrap(err, "close body failed")
 		}
 	}()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		trace.Error(err)
+		err = errors.Wrap(err, "read failed")
 		return
 	}
 
@@ -470,29 +461,26 @@ func (c *Client) Start(conn WebsocketConn) (err error) { // nolint: gocyclo
 	parsed := struct{ Response string }{}
 	err = json.Unmarshal(body, &parsed)
 	if err != nil {
-		trace.Error(err)
-		trace.DebugMessage("body: %s", string(body))
+		err = errors.Wrap(err, "json unmarshal failed")
 		return
 	}
 
 	// Confirm the server response is what we expect.
 	if parsed.Response != "started" {
-		err = errors.New("start response is not 'started': " + parsed.Response)
-		trace.Error(err)
+		err = errors.Errorf("start response is not 'started': %s", parsed.Response)
 		return
 	}
 
 	// Wait for the init message.
 	t, p, err := conn.ReadMessage()
 	if err != nil {
-		trace.Error(err)
+		err = errors.Wrap(err, "message read failed")
 		return
 	}
 
 	// Verify the correct response type was received.
 	if t != websocket.TextMessage {
-		err = errors.New("unexpected websocket control type:" + strconv.Itoa(t))
-		trace.Error(err)
+		err = errors.Errorf("unexpected websocket control type: %d", t)
 		return
 	}
 
@@ -500,15 +488,13 @@ func (c *Client) Start(conn WebsocketConn) (err error) { // nolint: gocyclo
 	var pcm Message
 	err = json.Unmarshal(p, &pcm)
 	if err != nil {
-		trace.Error(err)
+		err = errors.Wrap(err, "json unmarshal failed")
 		return
 	}
 
 	serverInitialized := 1
 	if pcm.S != serverInitialized {
-		err = errors.New("unexpected S value received from server: " + strconv.Itoa(pcm.S))
-		trace.Error(err)
-		trace.DebugMessage("message: %s", string(p))
+		err = errors.Errorf("unexpected S value received from server: %d | message: %s", pcm.S, string(p))
 		return
 	}
 
@@ -543,7 +529,8 @@ func (c *Client) Reconnect() (conn *websocket.Conn, err error) {
 	// Perform the reconnection.
 	conn, err = c.xconnect(u.String())
 	if err != nil {
-		trace.Error(err)
+		err = errors.Wrap(err, "xconnect failed")
+		return
 	}
 
 	// Once complete, set the new connection for this client.
@@ -557,20 +544,20 @@ func (c *Client) Reconnect() (conn *websocket.Conn, err error) {
 func (c *Client) Init() (err error) {
 	err = c.Negotiate()
 	if err != nil {
-		trace.Error(err)
+		err = errors.Wrap(err, "negotiate failed")
 		return
 	}
 
 	var conn *websocket.Conn
 	conn, err = c.Connect()
 	if err != nil {
-		trace.Error(err)
+		err = errors.Wrap(err, "connect failed")
 		return
 	}
 
 	err = c.Start(conn)
 	if err != nil {
-		trace.Error(err)
+		err = errors.Wrap(err, "start failed")
 		return
 	}
 
@@ -585,9 +572,9 @@ func (c *Client) attemptReconnect() (err error) {
 	reconnected := false
 	for i := 0; i < c.MaxReconnectRetries; i++ {
 		trace.DebugMessage("attempting to reconnect...")
-		_, ierr := c.Reconnect()
-		if ierr != nil {
-			trace.Error(ierr)
+		_, err = c.Reconnect()
+		if err != nil {
+			err = errors.Wrapf(err, "reconnect failed (%d)", i)
 			continue
 		}
 
@@ -630,25 +617,25 @@ func (c *Client) readMessages() {
 
 		select {
 		case err := <-errCh:
-			trace.Error(err)
 			// Handle various types of errors.
 			// https://tools.ietf.org/html/rfc6455#section-7.4.1
-			if errMatches(err, "websocket: close 1001 (going away)") {
+			if errMatches(err, "1001") {
+				// "going away" error
 				err = c.attemptReconnect()
 				if err != nil {
-					trace.Error(err)
+					err = errors.Wrap(err, "reconnect attempt failed")
 					c.errs <- err
 				}
 				// The connection is closed or replaced, so we
 				// return.
 				return
-			} else if errMatches(err, "websocket: close 1006 (abnormal closure)") {
+			} else if errMatches(err, "1006") {
+				// "abnormal closure" error
 				err = c.attemptReconnect()
 				if err != nil {
-					trace.Error(err)
+					err = errors.Wrap(err, "reconnect attempt failed")
 					c.errs <- err
 				}
-
 				// The connection is closed or replaced, so we
 				// return.
 				return
@@ -667,7 +654,7 @@ func (c *Client) readMessages() {
 			var err error
 			err = json.Unmarshal(p, &msg)
 			if err != nil {
-				trace.Error(err)
+				err = errors.Wrap(err, "json unmarshal failled")
 				c.errs <- err
 				return
 			}
@@ -684,14 +671,13 @@ func (c *Client) Send(m hubs.ClientMsg) (err error) {
 	// Verify a connection has been created.
 	if c.Conn == nil {
 		err = errors.New("send: connection not set")
-		trace.Error(err)
 		return
 	}
 
 	// Write the message.
 	err = c.Conn.WriteJSON(m)
 	if err != nil {
-		trace.Error(err)
+		err = errors.Wrap(err, "json write failed")
 		return
 	}
 
