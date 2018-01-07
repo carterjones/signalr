@@ -619,18 +619,10 @@ func (c *Client) readMessages() {
 		case err := <-errCh:
 			// Handle various types of errors.
 			// https://tools.ietf.org/html/rfc6455#section-7.4.1
-			if errMatches(err, "1001") {
-				// "going away" error
-				err = c.attemptReconnect()
-				if err != nil {
-					err = errors.Wrap(err, "reconnect attempt failed")
-					c.errs <- err
-				}
-				// The connection is closed or replaced, so we
-				// return.
-				return
-			} else if errMatches(err, "1006") {
-				// "abnormal closure" error
+			if errMatches(err, "1000") || errMatches(err, "1001") || errMatches(err, "1006") {
+				// 1000: normal closure
+				// 1001: going away
+				// 1006: abnormal closure
 				err = c.attemptReconnect()
 				if err != nil {
 					err = errors.Wrap(err, "reconnect attempt failed")

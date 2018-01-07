@@ -175,6 +175,17 @@ func TestClient_readMessages(t *testing.T) {
 		inErrs  func() chan string
 		wantErr interface{}
 	}{
+		"1000 error": {
+			func() chan string {
+				errCh := make(chan string)
+				go func() {
+					errCh <- "websocket: close 1000 (normal)"
+					close(errCh)
+				}()
+				return errCh
+			},
+			nil,
+		},
 		"1001 error": {
 			func() chan string {
 				errCh := make(chan string)
@@ -236,22 +247,25 @@ func TestClient_readMessages(t *testing.T) {
 			func() chan string {
 				errCh := make(chan string)
 				go func() {
+					errCh <- "websocket: close 1000 (normal)"
 					errCh <- "websocket: close 1001 (going away)"
 					errCh <- "websocket: close 1006 (abnormal closure)"
+					errCh <- "websocket: close 1000 (normal)"
 					errCh <- "websocket: close 1001 (going away)"
 					errCh <- "websocket: close 1006 (abnormal closure)"
+					errCh <- "websocket: close 1000 (normal)"
 					errCh <- "websocket: close 1001 (going away)"
 					errCh <- "websocket: close 1006 (abnormal closure)"
+					errCh <- "websocket: close 1000 (normal)"
 					errCh <- "websocket: close 1001 (going away)"
 					errCh <- "websocket: close 1006 (abnormal closure)"
+					errCh <- "websocket: close 1000 (normal)"
 					errCh <- "websocket: close 1001 (going away)"
 					errCh <- "websocket: close 1006 (abnormal closure)"
+					errCh <- "websocket: close 1000 (normal)"
 					errCh <- "websocket: close 1001 (going away)"
 					errCh <- "websocket: close 1006 (abnormal closure)"
-					errCh <- "websocket: close 1001 (going away)"
-					errCh <- "websocket: close 1006 (abnormal closure)"
-					errCh <- "websocket: close 1001 (going away)"
-					errCh <- "websocket: close 1006 (abnormal closure)"
+					errCh <- "websocket: close 1000 (normal)"
 					errCh <- "websocket: close 1001 (going away)"
 					errCh <- "websocket: close 1006 (abnormal closure)"
 					close(errCh)
@@ -264,22 +278,25 @@ func TestClient_readMessages(t *testing.T) {
 			func() chan string {
 				errCh := make(chan string)
 				go func() {
+					errCh <- "websocket: close 1000 (normal)"
 					errCh <- "websocket: close 1001 (going away)"
 					errCh <- "websocket: close 1006 (abnormal closure)"
+					errCh <- "websocket: close 1000 (normal)"
 					errCh <- "websocket: close 1001 (going away)"
 					errCh <- "websocket: close 1006 (abnormal closure)"
+					errCh <- "websocket: close 1000 (normal)"
 					errCh <- "websocket: close 1001 (going away)"
 					errCh <- "websocket: close 1006 (abnormal closure)"
+					errCh <- "websocket: close 1000 (normal)"
 					errCh <- "websocket: close 1001 (going away)"
 					errCh <- "websocket: close 1006 (abnormal closure)"
+					errCh <- "websocket: close 1000 (normal)"
 					errCh <- "websocket: close 1001 (going away)"
 					errCh <- "websocket: close 1006 (abnormal closure)"
+					errCh <- "websocket: close 1000 (normal)"
 					errCh <- "websocket: close 1001 (going away)"
 					errCh <- "websocket: close 1006 (abnormal closure)"
-					errCh <- "websocket: close 1001 (going away)"
-					errCh <- "websocket: close 1006 (abnormal closure)"
-					errCh <- "websocket: close 1001 (going away)"
-					errCh <- "websocket: close 1006 (abnormal closure)"
+					errCh <- "websocket: close 1000 (normal)"
 					errCh <- "websocket: close 1001 (going away)"
 					errCh <- "websocket: close 1006 (abnormal closure)"
 					errCh <- "generic error"
