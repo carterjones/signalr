@@ -212,6 +212,53 @@ func (c *Client) prepareRequest(url string) (req *http.Request, err error) {
 	return
 }
 
+func (c *Client) processNegotiateResponse(resp *http.Response, errOccurred bool) (err error) {
+	var body []byte
+	body, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		err = errors.Wrap(err, "read failed")
+		return
+	}
+
+	// Create a struct to allow parsing of the response object.
+	parsed := struct {
+		URL                     string `json:"Url"`
+		ConnectionToken         string
+		ConnectionID            string `json:"ConnectionId"`
+		KeepAliveTimeout        float64
+		DisconnectTimeout       float64
+		ConnectionTimeout       float64
+		TryWebSockets           bool
+		ProtocolVersion         string
+		TransportConnectTimeout float64
+		LongPollDelay           float64
+	}{}
+	err = json.Unmarshal(body, &parsed)
+	if err != nil {
+		err = errors.Wrap(err, "json unmarshal failed")
+		return
+	}
+
+	if errOccurred {
+		// If an error occurred earlier, and yet we got here,
+		// then we want to let the user know that the
+		// negotiation successfully recovered.
+		trace.DebugMessage("the negotiate retry was successful")
+	}
+
+	// Set the connection token and ID.
+	c.ConnectionToken = parsed.ConnectionToken
+	c.ConnectionID = parsed.ConnectionID
+
+	// Update the protocol version.
+	c.Protocol = parsed.ProtocolVersion
+
+	// Set the SignalR endpoint.
+	c.Endpoint = parsed.URL
+
+	return
+}
+
 // Negotiate implements the negotiate step of the SignalR connection sequence.
 func (c *Client) Negotiate() (err error) {
 	// Reset the connection token in case it has been set.
@@ -264,49 +311,7 @@ func (c *Client) Negotiate() (err error) {
 			continue
 		}
 
-		var body []byte
-		body, err = ioutil.ReadAll(resp.Body)
-		if err != nil {
-			err = errors.Wrap(err, "read failed")
-			return
-		}
-
-		// Create a struct to allow parsing of the response object.
-		parsed := struct {
-			URL                     string `json:"Url"`
-			ConnectionToken         string
-			ConnectionID            string `json:"ConnectionId"`
-			KeepAliveTimeout        float64
-			DisconnectTimeout       float64
-			ConnectionTimeout       float64
-			TryWebSockets           bool
-			ProtocolVersion         string
-			TransportConnectTimeout float64
-			LongPollDelay           float64
-		}{}
-		err = json.Unmarshal(body, &parsed)
-		if err != nil {
-			err = errors.Wrap(err, "json unmarshal failed")
-			return
-		}
-
-		if errOccurred {
-			// If an error occurred earlier, and yet we got here,
-			// then we want to let the user know that the
-			// negotiation successfully recovered.
-			trace.DebugMessage("the negotiate retry was successful")
-		}
-
-		// Set the connection token and ID.
-		c.ConnectionToken = parsed.ConnectionToken
-		c.ConnectionID = parsed.ConnectionID
-
-		// Update the protocol version.
-		c.Protocol = parsed.ProtocolVersion
-
-		// Set the SignalR endpoint.
-		c.Endpoint = parsed.URL
-
+		err = c.processNegotiateResponse(resp, errOccurred)
 		return
 	}
 
