@@ -317,16 +317,10 @@ func (c *Client) Negotiate() (err error) {
 	return
 }
 
-func (c *Client) xconnect(url string) (conn *websocket.Conn, err error) {
-	// Create a dialer that uses the supplied TLS client configuration.
-	dialer := &websocket.Dialer{
-		Proxy:           http.ProxyFromEnvironment,
-		TLSClientConfig: c.TLSClientConfig,
-	}
-
+func (c *Client) makeHeader() (header http.Header) {
 	// Create a header object that contains any cookies that have been set
 	// in prior requests.
-	header := make(http.Header)
+	header = make(http.Header)
 	if c.HTTPClient.Jar != nil {
 		// Make a negotiate URL so we can look up the cookie that was
 		// set on the negotiate request.
@@ -347,6 +341,19 @@ func (c *Client) xconnect(url string) (conn *websocket.Conn, err error) {
 	for k, v := range c.Headers {
 		header.Add(k, v)
 	}
+
+	return
+}
+
+func (c *Client) xconnect(url string) (conn *websocket.Conn, err error) {
+	// Create a dialer that uses the supplied TLS client configuration.
+	dialer := &websocket.Dialer{
+		Proxy:           http.ProxyFromEnvironment,
+		TLSClientConfig: c.TLSClientConfig,
+	}
+
+	// Prepare a header to be used when dialing to the service.
+	header := c.makeHeader()
 
 	// Perform the connection in a retry loop.
 	for i := 0; i < c.MaxConnectRetries; i++ {
