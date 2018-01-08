@@ -420,10 +420,65 @@ func (c *Client) Connect() (conn *websocket.Conn, err error) {
 	return
 }
 
+func (c *Client) processStartResponse(resp *http.Response, conn WebsocketConn) (err error) {
+	var body []byte
+	body, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		err = errors.Wrap(err, "read failed")
+		return
+	}
+
+	// Create an anonymous struct to parse the response.
+	parsed := struct{ Response string }{}
+	err = json.Unmarshal(body, &parsed)
+	if err != nil {
+		err = errors.Wrap(err, "json unmarshal failed")
+		return
+	}
+
+	// Confirm the server response is what we expect.
+	if parsed.Response != "started" {
+		err = errors.Errorf("start response is not 'started': %s", parsed.Response)
+		return
+	}
+
+	// Wait for the init message.
+	var t int
+	var p []byte
+	t, p, err = conn.ReadMessage()
+	if err != nil {
+		err = errors.Wrap(err, "message read failed")
+		return
+	}
+
+	// Verify the correct response type was received.
+	if t != websocket.TextMessage {
+		err = errors.Errorf("unexpected websocket control type: %d", t)
+		return
+	}
+
+	// Extract the server message.
+	var pcm Message
+	err = json.Unmarshal(p, &pcm)
+	if err != nil {
+		err = errors.Wrap(err, "json unmarshal failed")
+		return
+	}
+
+	serverInitialized := 1
+	if pcm.S != serverInitialized {
+		err = errors.Errorf("unexpected S value received from server: %d | message: %s", pcm.S, string(p))
+		return
+	}
+
+	// Since we got to this point, the connection is successful. So we set
+	// the connection for the client.
+	c.Conn = conn
+	return
+}
+
 // Start implements the start step of the SignalR connection sequence.
-//
-// TODO(carter): reduce the cyclomatic complexity of this function
-func (c *Client) Start(conn WebsocketConn) (err error) { // nolint: gocyclo
+func (c *Client) Start(conn WebsocketConn) (err error) {
 	u := c.makeURL("start")
 
 	var req *http.Request
@@ -464,56 +519,7 @@ func (c *Client) Start(conn WebsocketConn) (err error) { // nolint: gocyclo
 		}
 	}()
 
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		err = errors.Wrap(err, "read failed")
-		return
-	}
-
-	// Create an anonymous struct to parse the response.
-	parsed := struct{ Response string }{}
-	err = json.Unmarshal(body, &parsed)
-	if err != nil {
-		err = errors.Wrap(err, "json unmarshal failed")
-		return
-	}
-
-	// Confirm the server response is what we expect.
-	if parsed.Response != "started" {
-		err = errors.Errorf("start response is not 'started': %s", parsed.Response)
-		return
-	}
-
-	// Wait for the init message.
-	t, p, err := conn.ReadMessage()
-	if err != nil {
-		err = errors.Wrap(err, "message read failed")
-		return
-	}
-
-	// Verify the correct response type was received.
-	if t != websocket.TextMessage {
-		err = errors.Errorf("unexpected websocket control type: %d", t)
-		return
-	}
-
-	// Extract the server message.
-	var pcm Message
-	err = json.Unmarshal(p, &pcm)
-	if err != nil {
-		err = errors.Wrap(err, "json unmarshal failed")
-		return
-	}
-
-	serverInitialized := 1
-	if pcm.S != serverInitialized {
-		err = errors.Errorf("unexpected S value received from server: %d | message: %s", pcm.S, string(p))
-		return
-	}
-
-	// Since we got to this point, the connection is successful. So we set
-	// the connection for the client.
-	c.Conn = conn
+	err = c.processStartResponse(resp, conn)
 	return
 }
 
