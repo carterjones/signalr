@@ -634,6 +634,23 @@ func (c *Client) processReadMessagesError(err error) {
 	}
 }
 
+func (c *Client) processReadMessagesMessage(p []byte) (err error) {
+	// Ignore KeepAlive messages.
+	if string(p) == "{}" {
+		return
+	}
+
+	var msg Message
+	err = json.Unmarshal(p, &msg)
+	if err != nil {
+		err = errors.Wrap(err, "json unmarshal failled")
+		return
+	}
+
+	c.messages <- msg
+	return
+}
+
 func (c *Client) readMessages() {
 	for {
 		// Prepare channels for the select statement later.
@@ -655,21 +672,10 @@ func (c *Client) readMessages() {
 			c.processReadMessagesError(err)
 			return
 		case p := <-pCh:
-			// Ignore KeepAlive messages.
-			if string(p) == "{}" {
-				continue
-			}
-
-			var msg Message
-			var err error
-			err = json.Unmarshal(p, &msg)
+			err := c.processReadMessagesMessage(p)
 			if err != nil {
-				err = errors.Wrap(err, "json unmarshal failled")
 				c.errs <- err
-				return
 			}
-
-			c.messages <- msg
 		case <-c.done:
 			return
 		}
