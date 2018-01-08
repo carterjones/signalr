@@ -402,7 +402,7 @@ func (c *Client) Connect() (conn *websocket.Conn, err error) {
 	// Perform the connection.
 	conn, err = c.xconnect(u.String())
 	if err != nil {
-		err = errors.Wrap(err, "xkconnect failed")
+		err = errors.Wrap(err, "xconnect failed")
 	}
 
 	return
