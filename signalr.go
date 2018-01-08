@@ -133,10 +133,6 @@ type Client struct {
 	// when contacting the SignalR service.
 	RetryWaitDuration time.Duration
 
-	messages chan Message
-	errs     chan error
-	done     chan bool
-
 	// This is the connection token set during the negotiate phase of the
 	// protocol and used to uniquely identify the connection to the server
 	// in all subsequent phases of the connection.
@@ -148,6 +144,22 @@ type Client struct {
 
 	// Header values that should be applied to all HTTP requests.
 	Headers map[string]string
+
+	// This value is not part of the SignalR protocol. If this value is set,
+	// it will be used in debug messages.
+	CustomID string
+
+	messages chan Message
+	errs     chan error
+	done     chan bool
+}
+
+func (c *Client) getCustomIDPrefix() string {
+	if c.CustomID == "" {
+		return ""
+	}
+
+	return "[" + c.CustomID + "] "
 }
 
 // Conditionally encrypt the traffic depending on the initial
@@ -249,7 +261,7 @@ func (c *Client) processNegotiateResponse(resp *http.Response, errOccurred bool)
 		// If an error occurred earlier, and yet we got here,
 		// then we want to let the user know that the
 		// negotiation successfully recovered.
-		trace.DebugMessage("the negotiate retry was successful")
+		trace.DebugMessage("%sthe negotiate retry was successful", c.getCustomIDPrefix())
 	}
 
 	// Set the connection token and ID.
@@ -305,13 +317,13 @@ func (c *Client) Negotiate() (err error) {
 			// Everything worked, so do nothing.
 		case 503:
 			err = errors.Errorf("request failed: %s", resp.Status)
-			trace.DebugMessage("negotiate: retrying after %s", resp.Status)
+			trace.DebugMessage("%snegotiate: retrying after %s", c.getCustomIDPrefix(), resp.Status)
 			errOccurred = true
 			time.Sleep(c.RetryWaitDuration)
 			continue
 		default:
 			err = errors.Errorf("request failed: %s", resp.Status)
-			trace.DebugMessage("negotiate: retrying after %s", resp.Status)
+			trace.DebugMessage("%snegotiate: retrying after %s", c.getCustomIDPrefix(), resp.Status)
 			errOccurred = true
 			time.Sleep(c.RetryWaitDuration)
 			continue
@@ -322,7 +334,7 @@ func (c *Client) Negotiate() (err error) {
 	}
 
 	if errOccurred {
-		trace.DebugMessage("the negotiate retry was unsuccessful")
+		trace.DebugMessage("%sthe negotiate retry was unsuccessful", c.getCustomIDPrefix())
 	}
 
 	return
@@ -597,14 +609,14 @@ func (c *Client) attemptReconnect() (err error) {
 	// Attempt to reconnect in a retry loop.
 	reconnected := false
 	for i := 0; i < c.MaxReconnectRetries; i++ {
-		trace.DebugMessage("attempting to reconnect...")
+		trace.DebugMessage("%sattempting to reconnect...", c.getCustomIDPrefix())
 		_, err = c.Reconnect()
 		if err != nil {
 			err = errors.Wrapf(err, "reconnect failed (%d)", i)
 			continue
 		}
 
-		trace.DebugMessage("reconnected successfully")
+		trace.DebugMessage("%sreconnected successfully", c.getCustomIDPrefix())
 		reconnected = true
 		break
 	}
