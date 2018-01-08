@@ -600,10 +600,38 @@ func errCode(err error) (code int) {
 	re := regexp.MustCompile("[0-9]+")
 	s := re.FindString(err.Error())
 
-	// Ignore the error. This will just result in returning zero, which is
-	// fine.
-	code, _ = strconv.Atoi(s)
+	var e error
+	code, e = strconv.Atoi(s)
+	if e != nil {
+		// -1 is not a valid error code, so we use this, rather than
+		// introducing the need for another error handler on the caller
+		// of this function.
+		code = -1
+	}
 	return
+}
+
+func (c *Client) processReadMessagesError(err error) {
+	// Handle various types of errors.
+	// https://tools.ietf.org/html/rfc6455#section-7.4.1
+	code := errCode(err)
+	switch code {
+	case 1000:
+		// normal closure
+		fallthrough
+	case 1001:
+		// going away
+		fallthrough
+	case 1006:
+		// abnormal closure
+		err = c.attemptReconnect()
+		if err != nil {
+			err = errors.Wrap(err, "reconnect attempt failed")
+			c.errs <- err
+		}
+	default:
+		c.errs <- err
+	}
 }
 
 func (c *Client) readMessages() {
@@ -624,27 +652,7 @@ func (c *Client) readMessages() {
 
 		select {
 		case err := <-errCh:
-			// Handle various types of errors.
-			// https://tools.ietf.org/html/rfc6455#section-7.4.1
-			code := errCode(err)
-			switch code {
-			case 1000:
-				// normal closure
-				fallthrough
-			case 1001:
-				// going away
-				fallthrough
-			case 1006:
-				// abnormal closure
-				err = c.attemptReconnect()
-				if err != nil {
-					err = errors.Wrap(err, "reconnect attempt failed")
-					c.errs <- err
-				}
-			default:
-				c.errs <- err
-			}
-
+			c.processReadMessagesError(err)
 			return
 		case p := <-pCh:
 			// Ignore KeepAlive messages.
