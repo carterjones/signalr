@@ -10,7 +10,8 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"strings"
+	"regexp"
+	"strconv"
 	"time"
 
 	"github.com/carterjones/helpers/trace"
@@ -595,8 +596,14 @@ func (c *Client) attemptReconnect() (err error) {
 	return
 }
 
-func errMatches(err error, s string) bool {
-	return strings.Contains(err.Error(), s)
+func errCode(err error) (code int) {
+	re := regexp.MustCompile("[0-9]+")
+	s := re.FindString(err.Error())
+
+	// Ignore the error. This will just result in returning zero, which is
+	// fine.
+	code, _ = strconv.Atoi(s)
+	return
 }
 
 func (c *Client) readMessages() {
@@ -619,22 +626,25 @@ func (c *Client) readMessages() {
 		case err := <-errCh:
 			// Handle various types of errors.
 			// https://tools.ietf.org/html/rfc6455#section-7.4.1
-			if errMatches(err, "1000") || errMatches(err, "1001") || errMatches(err, "1006") {
-				// 1000: normal closure
-				// 1001: going away
-				// 1006: abnormal closure
+			code := errCode(err)
+			switch code {
+			case 1000:
+				// normal closure
+				fallthrough
+			case 1001:
+				// going away
+				fallthrough
+			case 1006:
+				// abnormal closure
 				err = c.attemptReconnect()
 				if err != nil {
 					err = errors.Wrap(err, "reconnect attempt failed")
 					c.errs <- err
 				}
-				// The connection is closed or replaced, so we
-				// return.
-				return
+			default:
+				c.errs <- err
 			}
 
-			// Default behavior is to just return.
-			c.errs <- err
 			return
 		case p := <-pCh:
 			// Ignore KeepAlive messages.
