@@ -371,7 +371,7 @@ func (c *Client) xconnect(url string) (conn *websocket.Conn, err error) {
 
 		// Verify that a response accompanies the error.
 		if resp == nil {
-			err = errors.New(err.Error() + ", but no response received")
+			err = errors.Wrap(err, "no response received")
 			return
 		}
 
