@@ -137,8 +137,14 @@ type Client struct {
 	errs     chan error
 	done     chan bool
 
+	// This is the connection token set during the negotiate phase of the
+	// protocol and used to uniquely identify the connection to the server
+	// in all subsequent phases of the connection.
 	ConnectionToken string
-	ConnectionID    string
+
+	// This is the ID of the connection. It is set during the negotiate
+	// phase and then ignored by all subsequent steps.
+	ConnectionID string
 
 	// Header values that should be applied to all HTTP requests.
 	Headers map[string]string
