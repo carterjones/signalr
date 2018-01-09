@@ -298,7 +298,7 @@ func TestClient_Connect(t *testing.T) {
 		"generic error": {
 			fn:      throw404Error,
 			TLS:     true,
-			wantErr: "xconnect failed: 404 Not Found: websocket: bad handshake",
+			wantErr: "xconnect failed: 404 Not Found, retry 0: websocket: bad handshake",
 		},
 	}
 
