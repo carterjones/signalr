@@ -316,11 +316,9 @@ func (c *Client) Negotiate() (err error) {
 		case 200:
 			// Everything worked, so do nothing.
 		case 503:
-			err = errors.Errorf("request failed: %s", resp.Status)
-			trace.DebugMessage("%snegotiate: retrying after %s", c.getCustomIDPrefix(), resp.Status)
-			errOccurred = true
-			time.Sleep(c.RetryWaitDuration)
-			continue
+			fallthrough
+		case 524:
+			fallthrough
 		default:
 			err = errors.Errorf("request failed: %s", resp.Status)
 			trace.DebugMessage("%snegotiate: retrying after %s", c.getCustomIDPrefix(), resp.Status)
