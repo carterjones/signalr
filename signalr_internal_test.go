@@ -112,8 +112,8 @@ func connect(w http.ResponseWriter, r *http.Request) {
 
 	go func() {
 		for {
-			_, _, err = c.ReadMessage()
-			if err != nil {
+			_, _, rerr := c.ReadMessage()
+			if rerr != nil {
 				return
 			}
 		}
@@ -121,8 +121,8 @@ func connect(w http.ResponseWriter, r *http.Request) {
 
 	go func() {
 		for {
-			err = c.WriteMessage(websocket.TextMessage, []byte(`{"S":1}`))
-			if err != nil {
+			werr := c.WriteMessage(websocket.TextMessage, []byte(`{"S":1}`))
+			if werr != nil {
 				return
 			}
 		}
@@ -338,62 +338,61 @@ func TestClient_readMessages(t *testing.T) {
 		fconn := newFakeConn()
 
 		// Pipe errors to the connection.
-		errsComplete := false
-		ready := make(chan bool)
 		go func() {
 			errs := tc.inErrs()
 			for tErr := range errs {
 				fconn.errs <- errors.New(tErr)
 			}
-			go func() {
-				errsComplete = true
-				c.Close()
-				ready <- true
-			}()
+
+			// Wait a little bit for processing to complete.
+			//
+			// HACK: this could probably be solved with channel
+			// communication/signals, but I am bad at computer and
+			// can't figure it out.
+			time.Sleep(100 * time.Millisecond)
+
+			// Close the connection.
+			c.Close()
 		}()
 
 		// Register the fake connection.
-		c.Conn = fconn
+		c.SetConn(fconn)
 
 		// Test readMessages.
-		go c.readMessages()
-		errs := c.Errors()
-		msgs := c.Messages()
+		msgs := make(chan Message)
+		errs := make(chan error)
+		done := make(chan bool)
 		go func() {
-			// Save the error that is received.
-			err = <-errs
+			// Process all messages. This will finish when the
+			// connection is closed.
+			c.readMessages(msgs, errs)
 
-			// Indicate we are ready to proceed.
-			ready <- true
+			// At this point, the connection has been closed and the
+			// done signal can be sent.
+			done <- true
 		}()
-		go func() {
-			for {
-				// Receive a message.
-				<-msgs
 
+		// HACK: wait a whole bunch until it does what we want. This
+		// will need to be tuned depending on the CI tool and its
+		// resources.
+		timeout := 3 * time.Second
+	loop:
+		for {
+			select {
+			case <-msgs:
 				// Reset the connection so it fails again. This
 				// is the key to the whole test. We are
 				// simulating as lots of combinations of
 				// consecutive failures.
-				c.Conn = fconn
-
-				// Close the client.
-				//log.Println("gothere6")
-				if errsComplete {
-					go func() {
-						c.Close()
-
-						// Indicate we are ready to
-						// proceed. This happens if an
-						// error was handled gracefully.
-						ready <- true
-					}()
-				}
+				go c.SetConn(fconn)
+			case err = <-errs:
+				break loop
+			case <-done:
+				break loop
+			case <-time.After(timeout):
+				break loop
 			}
-		}()
-
-		// Wait for the error to be returned.
-		<-ready
+		}
 
 		// Verify the results.
 		testErrMatches(t, id, err, tc.wantErr)

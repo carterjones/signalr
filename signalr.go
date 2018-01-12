@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"regexp"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/carterjones/helpers/trace"
@@ -104,12 +105,6 @@ type Client struct {
 	// The HTTPClient used to initialize the websocket connection.
 	HTTPClient *http.Client
 
-	// This field holds a struct that can read messages from and write JSON
-	// objects to a websocket. In practice, this is simply a raw websocket
-	// connection that results from a successful connection to the SignalR
-	// server.
-	Conn WebsocketConn
-
 	// An optional setting to provide a non-default TLS configuration to use
 	// when connecting to the websocket.
 	TLSClientConfig *tls.Config
@@ -149,9 +144,14 @@ type Client struct {
 	// it will be used in debug messages.
 	CustomID string
 
-	messages chan Message
-	errs     chan error
-	done     chan bool
+	// This field holds a struct that can read messages from and write JSON
+	// objects to a websocket. In practice, this is simply a raw websocket
+	// connection that results from a successful connection to the SignalR
+	// server.
+	conn    WebsocketConn
+	connMux sync.Mutex
+
+	done chan bool
 }
 
 func (c *Client) getCustomIDPrefix() string {
@@ -440,6 +440,13 @@ func (c *Client) Connect() (conn *websocket.Conn, err error) {
 }
 
 func (c *Client) processStartResponse(resp *http.Response, conn WebsocketConn) (err error) {
+	defer func() {
+		derr := resp.Body.Close()
+		if derr != nil {
+			err = errors.Wrap(err, "close body failed")
+		}
+	}()
+
 	var body []byte
 	body, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
@@ -492,8 +499,22 @@ func (c *Client) processStartResponse(resp *http.Response, conn WebsocketConn) (
 
 	// Since we got to this point, the connection is successful. So we set
 	// the connection for the client.
-	c.Conn = conn
+	c.conn = conn
 	return
+}
+
+// SetConn changes the underlying websocket connection to the specified
+// connection. This is done using a mutex to wait until existing read operations
+// have completed.
+func (c *Client) SetConn(conn WebsocketConn) {
+	c.connMux.Lock()
+	c.conn = conn
+	c.connMux.Unlock()
+}
+
+// Conn returns the underlying websocket connection.
+func (c *Client) Conn() WebsocketConn {
+	return c.conn
 }
 
 // Start implements the start step of the SignalR connection sequence.
@@ -531,13 +552,6 @@ func (c *Client) Start(conn WebsocketConn) (err error) {
 		return
 	}
 
-	defer func() {
-		derr := resp.Body.Close()
-		if derr != nil {
-			err = errors.Wrap(err, "close body failed")
-		}
-	}()
-
 	err = c.processStartResponse(resp, conn)
 	return
 }
@@ -572,47 +586,58 @@ func (c *Client) Reconnect() (conn *websocket.Conn, err error) {
 	}
 
 	// Once complete, set the new connection for this client.
-	c.Conn = conn
+	c.conn = conn
 
 	return
 }
 
 // Init connects to the host and performs the websocket initialization routines
-// that are part of the SignalR specification.
-func (c *Client) Init() (err error) {
-	err = c.Negotiate()
-	if err != nil {
-		err = errors.Wrap(err, "negotiate failed")
-		return
-	}
+// that are part of the SignalR specification. It returns channels that:
+//  - receive messages from the websocket connection
+//  - receive errors encountered while processing the weblocket connection
+func (c *Client) Init() (msgCh chan Message, errCh chan error) {
+	errCh = make(chan error)
+	msgCh = make(chan Message)
 
-	var conn *websocket.Conn
-	conn, err = c.Connect()
-	if err != nil {
-		err = errors.Wrap(err, "connect failed")
-		return
-	}
+	go func() {
+		err := c.Negotiate()
+		if err != nil {
+			err = errors.Wrap(err, "negotiate failed")
+			errCh <- err
+			return
+		}
 
-	err = c.Start(conn)
-	if err != nil {
-		err = errors.Wrap(err, "start failed")
-		return
-	}
+		var conn *websocket.Conn
+		conn, err = c.Connect()
+		if err != nil {
+			err = errors.Wrap(err, "connect failed")
+			errCh <- err
+			return
+		}
 
-	// Start the read message loop.
-	go c.readMessages()
+		err = c.Start(conn)
+		if err != nil {
+			err = errors.Wrap(err, "start failed")
+			errCh <- err
+			return
+		}
+
+		// Start the read message loop.
+		c.readMessages(msgCh, errCh)
+	}()
 
 	return
 }
 
-func (c *Client) attemptReconnect() (err error) {
+func (c *Client) attemptReconnect(msgCh chan Message, errCh chan error) {
 	// Attempt to reconnect in a retry loop.
 	reconnected := false
 	for i := 0; i < c.MaxReconnectRetries; i++ {
 		trace.DebugMessage("%sattempting to reconnect...", c.getCustomIDPrefix())
+
+		var err error
 		_, err = c.Reconnect()
 		if err != nil {
-			err = errors.Wrapf(err, "reconnect failed (%d)", i)
 			continue
 		}
 
@@ -624,13 +649,22 @@ func (c *Client) attemptReconnect() (err error) {
 	// If the reconnect attempt succeeded, start the read message loop
 	// again and then exit.
 	if reconnected {
-		go c.readMessages()
+		go c.readMessages(msgCh, errCh)
 		return
 	}
 
 	// If the reconnect attempt failed, retry the init sequence again.
-	err = c.Init()
-	return
+	newMsgCh, newErrCh := c.Init()
+	go func() {
+		for {
+			select {
+			case msg := <-newMsgCh:
+				msgCh <- msg
+			case err := <-newErrCh:
+				errCh <- err
+			}
+		}
+	}()
 }
 
 func errCode(err error) (code int) {
@@ -648,7 +682,7 @@ func errCode(err error) (code int) {
 	return
 }
 
-func (c *Client) processReadMessagesError(err error) {
+func (c *Client) processReadMessagesError(err error, msgCh chan Message, errCh chan error) {
 	// Handle various types of errors.
 	// https://tools.ietf.org/html/rfc6455#section-7.4.1
 	code := errCode(err)
@@ -661,59 +695,82 @@ func (c *Client) processReadMessagesError(err error) {
 		fallthrough
 	case 1006:
 		// abnormal closure
-		err = c.attemptReconnect()
-		if err != nil {
-			err = errors.Wrap(err, "reconnect attempt failed")
-			c.errs <- err
-		}
+		c.attemptReconnect(msgCh, errCh)
 	default:
-		c.errs <- err
+		errCh <- err
 	}
 }
 
-func (c *Client) processReadMessagesMessage(p []byte) (err error) {
+func (c *Client) processReadMessagesMessage(p []byte, msgCh chan Message, errCh chan error) {
 	// Ignore KeepAlive messages.
 	if string(p) == "{}" {
 		return
 	}
 
 	var msg Message
-	err = json.Unmarshal(p, &msg)
+	err := json.Unmarshal(p, &msg)
 	if err != nil {
 		err = errors.Wrap(err, "json unmarshal failled")
+		errCh <- err
 		return
 	}
 
-	c.messages <- msg
+	msgCh <- msg
+}
+
+func (c *Client) readMessage(msgCh chan Message, errCh chan error) (ok bool) {
+	c.connMux.Lock()
+
+	// Set up a channel to receive signals from the Client.readMessage
+	// function as well as the goroutine that does the actual
+	// Client.conn.read. This way, the unlock operation is synchronized.
+	unlockCh := make(chan bool, 2)
+	go func() {
+		<-unlockCh
+		<-unlockCh
+		c.connMux.Unlock()
+	}()
+
+	// Set the ok flag to true to indicate that more messages can/should be
+	// read. Set the flag to false later on if this is no longer the case.
+	ok = true
+
+	// Prepare channels for the select statement later.
+	pCh := make(chan []byte)
+	errs := make(chan error)
+
+	// Wait for a message.
+	go func() {
+		_, p, err := c.conn.ReadMessage()
+		if err != nil {
+			errs <- err
+		} else {
+			pCh <- p
+		}
+
+		// Send a signal that the inner function is done processing.
+		unlockCh <- true
+	}()
+
+	select {
+	case err := <-errs:
+		c.processReadMessagesError(err, msgCh, errCh)
+	case p := <-pCh:
+		c.processReadMessagesMessage(p, msgCh, errCh)
+	case <-c.done:
+		ok = false
+		go func() { c.done <- true }()
+	}
+
+	// Send a signal that the outer function is done processing.
+	unlockCh <- true
+
 	return
 }
 
-func (c *Client) readMessages() {
+func (c *Client) readMessages(msgCh chan Message, errCh chan error) {
 	for {
-		// Prepare channels for the select statement later.
-		pCh := make(chan []byte)
-		errCh := make(chan error)
-
-		// Wait for a message.
-		go func() {
-			_, p, err := c.Conn.ReadMessage()
-			if err != nil {
-				errCh <- err
-			} else {
-				pCh <- p
-			}
-		}()
-
-		select {
-		case err := <-errCh:
-			c.processReadMessagesError(err)
-			return
-		case p := <-pCh:
-			err := c.processReadMessagesMessage(p)
-			if err != nil {
-				c.errs <- err
-			}
-		case <-c.done:
+		if !c.readMessage(msgCh, errCh) {
 			return
 		}
 	}
@@ -721,36 +778,33 @@ func (c *Client) readMessages() {
 
 // Send sends a message to the websocket connection.
 func (c *Client) Send(m hubs.ClientMsg) (err error) {
+	c.connMux.Lock()
+	defer func() {
+		c.connMux.Unlock()
+	}()
+
 	// Verify a connection has been created.
-	if c.Conn == nil {
+	if c.conn == nil {
 		err = errors.New("send: connection not set")
 		return
 	}
 
 	// Write the message.
-	err = c.Conn.WriteJSON(m)
+	err = c.conn.WriteJSON(m)
 	if err != nil {
 		err = errors.Wrap(err, "json write failed")
-		return
 	}
 
 	return
 }
 
-// Messages returns the channel that receives persistent connection messages.
-func (c *Client) Messages() <-chan Message {
-	return c.messages
-}
-
-// Errors returns the channel that reports any errors that were encountered
-// while reading from the underlying websocket connection.
-func (c *Client) Errors() <-chan error {
-	return c.errs
-}
-
-// Close sends a signal to shut down the connection.
+// Close shuts down the connection.
 func (c *Client) Close() {
+	// Send a signal to shut down the connection.
 	c.done <- true
+
+	// Wait for confirmation that it is shut down.
+	<-c.done
 }
 
 // New creates and initializes a SignalR client.
@@ -760,8 +814,6 @@ func New(host, protocol, endpoint, connectionData string) (c *Client) {
 	c.Protocol = protocol
 	c.Endpoint = endpoint
 	c.ConnectionData = connectionData
-	c.messages = make(chan Message)
-	c.errs = make(chan error)
 	c.done = make(chan bool)
 	c.HTTPClient = new(http.Client)
 	c.Headers = make(map[string]string)

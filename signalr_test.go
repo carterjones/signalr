@@ -143,8 +143,9 @@ func connect(w http.ResponseWriter, r *http.Request) {
 		for {
 			var msgType int
 			var bs []byte
-			msgType, bs, err = c.ReadMessage()
-			if err != nil {
+			var rerr error
+			msgType, bs, rerr = c.ReadMessage()
+			if rerr != nil {
 				return
 			}
 
@@ -154,8 +155,8 @@ func connect(w http.ResponseWriter, r *http.Request) {
 
 	go func() {
 		for {
-			err = c.WriteMessage(websocket.TextMessage, []byte(`{"S":1}`))
-			if err != nil {
+			werr := c.WriteMessage(websocket.TextMessage, []byte(`{"S":1}`))
+			if werr != nil {
 				return
 			}
 		}
@@ -192,35 +193,36 @@ func throwMalformedStatusCodeError(w http.ResponseWriter, r *http.Request) {
 func TestClient_Negotiate(t *testing.T) {
 	cases := map[string]struct {
 		fn      http.HandlerFunc
-		in      signalr.Client
+		in      *signalr.Client
 		TLS     bool
-		exp     signalr.Client
+		exp     *signalr.Client
 		wantErr string
 	}{
 		"successful http": {
 			fn: negotiate,
-			in: signalr.Client{
+			in: &signalr.Client{
 				Protocol:       "1337",
 				Endpoint:       "/signalr",
 				ConnectionData: "all the data",
 			},
 			TLS: false,
-			exp: signalr.Client{
+			exp: &signalr.Client{
 				Protocol:        "1337",
 				Endpoint:        "/signalr",
 				ConnectionToken: "hello world",
 				ConnectionID:    "1234-ABC",
+				ConnectionData:  "",
 			},
 		},
 		"successful https": {
 			fn: negotiate,
-			in: signalr.Client{
+			in: &signalr.Client{
 				Protocol:       "1337",
 				Endpoint:       "/signalr",
 				ConnectionData: "all the data",
 			},
 			TLS: true,
-			exp: signalr.Client{
+			exp: &signalr.Client{
 				Protocol:        "1337",
 				Endpoint:        "/signalr",
 				ConnectionToken: "hello world",
@@ -229,20 +231,28 @@ func TestClient_Negotiate(t *testing.T) {
 		},
 		"503 error": {
 			fn:      throw503Error,
+			in:      &signalr.Client{},
+			exp:     &signalr.Client{},
 			wantErr: "503 Service Unavailable",
 		},
 		"default error": {
 			fn:      throw123Error,
+			in:      &signalr.Client{},
+			exp:     &signalr.Client{},
 			wantErr: "123 status code",
 		},
 		"failed get request": {
 			fn:      throwMalformedStatusCodeError,
+			in:      &signalr.Client{},
+			exp:     &signalr.Client{},
 			wantErr: "malformed HTTP status code",
 		},
 		"invalid json": {
 			fn: func(w http.ResponseWriter, r *http.Request) {
 				w.Write([]byte("invalid json"))
 			},
+			in:      &signalr.Client{},
+			exp:     &signalr.Client{},
 			wantErr: "invalid character 'i' looking for beginning of value",
 		},
 	}
@@ -420,12 +430,11 @@ func TestClient_Start(t *testing.T) {
 
 		// Execute the start function.
 		err = c.Start(conn)
-
 		if tc.wantErr != "" {
 			errMatches(t, id, err, tc.wantErr)
 		} else {
 			// Verify that the connection was properly set.
-			equals(t, id, conn, c.Conn)
+			equals(t, id, conn, c.Conn())
 
 			// Verify no error occurred.
 			ok(t, id, err)
@@ -454,13 +463,7 @@ func TestClient_Init(t *testing.T) {
 	c := newTestClient("1.5", "/signalr", "all the data", ts)
 
 	// Initialize the client.
-	err := c.Init()
-	if err != nil {
-		log.Panic(err)
-	}
-
-	// TODO: literally any form of validatation
-	// TODO: check for specific errors
+	c.Init()
 }
 
 type FakeConn struct {
@@ -513,7 +516,7 @@ func TestClient_Send(t *testing.T) {
 		// Set up a fake connection, if one has been created.
 		if tc.conn != nil {
 			tc.conn.err = tc.err
-			c.Conn = tc.conn
+			c.SetConn(tc.conn)
 		}
 
 		// Send the message.
@@ -552,5 +555,4 @@ func TestNew(t *testing.T) {
 	equals(t, "max reconnect retries", 5, c.MaxReconnectRetries)
 	equals(t, "max start retries", 5, c.MaxStartRetries)
 	equals(t, "retry wait duration", 1*time.Minute, c.RetryWaitDuration)
-	notNil(t, "messages", c.Messages())
 }
