@@ -339,6 +339,7 @@ func TestClient_Start(t *testing.T) {
 	cases := map[string]struct {
 		startFn   http.HandlerFunc
 		connectFn http.HandlerFunc
+		scheme    signalr.Scheme
 		wantErr   string
 	}{
 		"successful start": {
@@ -400,6 +401,12 @@ func TestClient_Start(t *testing.T) {
 			},
 			wantErr: "unexpected S value received from server",
 		},
+		"request preparation failure": {
+			startFn:   start,
+			connectFn: connect,
+			scheme:    ":",
+			wantErr:   "request preparation failed",
+		},
 	}
 
 	for id, tc := range cases {
@@ -426,6 +433,11 @@ func TestClient_Start(t *testing.T) {
 			// If this fails, it is not part of the test, so we
 			// panic here.
 			log.Panic(err)
+		}
+
+		// Set a custom scheme if one is specified.
+		if tc.scheme != "" {
+			c.Scheme = tc.scheme
 		}
 
 		// Execute the start function.
