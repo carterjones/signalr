@@ -721,7 +721,7 @@ func (c *Client) processReadMessagesMessage(p []byte, msgCh chan Message, errCh 
 	var msg Message
 	err := json.Unmarshal(p, &msg)
 	if err != nil {
-		err = errors.Wrap(err, "json unmarshal failled")
+		err = errors.Wrap(err, "json unmarshal failed")
 		errCh <- err
 		return
 	}
