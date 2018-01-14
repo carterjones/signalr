@@ -493,3 +493,59 @@ func TestPrepareRequest(t *testing.T) {
 		}
 	}
 }
+
+func TestProcessReadMessagesMessage(t *testing.T) {
+	cases := map[string]struct {
+		p       []byte
+		expMsg  *Message
+		wantErr string
+	}{
+		"empty message": {
+			p:       []byte(""),
+			expMsg:  nil,
+			wantErr: "json unmarshal failed",
+		},
+		"bad json": {
+			p:       []byte("{invalid json"),
+			expMsg:  nil,
+			wantErr: "json unmarshal failed",
+		},
+		"keepalive": {
+			p:       []byte("{}"),
+			expMsg:  nil,
+			wantErr: "",
+		},
+		"normal message": {
+			p:       []byte(`{"C":"test message"}`),
+			expMsg:  &Message{C: "test message"},
+			wantErr: "",
+		},
+	}
+
+	for id, tc := range cases {
+		// Make channels to receive the data.
+		msgs := make(chan Message)
+		errs := make(chan error)
+
+		// Process the message.
+		go processReadMessagesMessage(tc.p, msgs, errs)
+
+		// Evaluate the results.
+		select {
+		case msg := <-msgs:
+			equals(t, id, *tc.expMsg, msg)
+		case err := <-errs:
+			testErrMatches(t, id, err, tc.wantErr)
+		case <-time.After(500 * time.Millisecond):
+			if tc.expMsg == nil && tc.wantErr == "" {
+				// We don't expect any response in this case, so
+				// we simply break.
+				break
+			}
+
+			// Otherwise, an logic flaw likely exists, so we flag
+			// it as an error.
+			t.Errorf("timeout while processing " + id)
+		}
+	}
+}

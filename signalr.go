@@ -712,7 +712,7 @@ func (c *Client) processReadMessagesError(err error, msgCh chan Message, errCh c
 	}
 }
 
-func (c *Client) processReadMessagesMessage(p []byte, msgCh chan Message, errCh chan error) {
+func processReadMessagesMessage(p []byte, msgs chan Message, errs chan error) {
 	// Ignore KeepAlive messages.
 	if string(p) == "{}" {
 		return
@@ -722,11 +722,11 @@ func (c *Client) processReadMessagesMessage(p []byte, msgCh chan Message, errCh 
 	err := json.Unmarshal(p, &msg)
 	if err != nil {
 		err = errors.Wrap(err, "json unmarshal failed")
-		errCh <- err
+		errs <- err
 		return
 	}
 
-	msgCh <- msg
+	msgs <- msg
 }
 
 func (c *Client) readMessage(msgCh chan Message, errCh chan error) (ok bool) {
@@ -767,7 +767,7 @@ func (c *Client) readMessage(msgCh chan Message, errCh chan error) (ok bool) {
 	case err := <-errs:
 		c.processReadMessagesError(err, msgCh, errCh)
 	case p := <-pCh:
-		c.processReadMessagesMessage(p, msgCh, errCh)
+		processReadMessagesMessage(p, msgCh, errCh)
 	case <-c.done:
 		ok = false
 		go func() { c.done <- true }()
