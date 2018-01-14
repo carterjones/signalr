@@ -599,7 +599,15 @@ func (c *Client) Init() (msgCh chan Message, errCh chan error) {
 	errCh = make(chan error)
 	msgCh = make(chan Message)
 
+	// Make a channel that is used to indicate that the connection
+	// initialization functions have completed or errored out.
+	done := make(chan bool)
+
 	go func() {
+		defer func() {
+			done <- true
+		}()
+
 		err := c.Negotiate()
 		if err != nil {
 			err = errors.Wrap(err, "negotiate failed")
@@ -623,8 +631,11 @@ func (c *Client) Init() (msgCh chan Message, errCh chan error) {
 		}
 
 		// Start the read message loop.
-		c.readMessages(msgCh, errCh)
+		go c.readMessages(msgCh, errCh)
 	}()
+
+	// Wait for success or failure.
+	<-done
 
 	return
 }
