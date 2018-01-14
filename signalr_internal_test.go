@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -547,5 +548,110 @@ func TestProcessReadMessagesMessage(t *testing.T) {
 			// it as an error.
 			t.Errorf("timeout while processing " + id)
 		}
+	}
+}
+
+type EmptyCookieJar struct{}
+
+func (j EmptyCookieJar) SetCookies(u *url.URL, cookies []*http.Cookie) {}
+
+func (j EmptyCookieJar) Cookies(u *url.URL) []*http.Cookie {
+	return make([]*http.Cookie, 0)
+}
+
+type FakeCookieJar struct {
+	cookies map[string]string
+}
+
+func (j FakeCookieJar) SetCookies(u *url.URL, cookies []*http.Cookie) {}
+
+func (j FakeCookieJar) Cookies(u *url.URL) (cookies []*http.Cookie) {
+	cookies = make([]*http.Cookie, len(j.cookies))
+	i := 0
+	for k, v := range j.cookies {
+		cookies[i] = &http.Cookie{
+			Name:  k,
+			Value: v,
+		}
+		i++
+	}
+	// Sort it so the results are consistent.
+	sort.Slice(cookies, func(i, j int) bool {
+		return strings.Compare(cookies[i].Name, cookies[j].Name) < 0
+	})
+	return
+}
+
+func TestMakeHeader(t *testing.T) {
+	cases := map[string]struct {
+		in  *Client
+		exp http.Header
+	}{
+		"nil client": {
+			in:  nil,
+			exp: http.Header{},
+		},
+		"nil http client": {
+			in:  &Client{HTTPClient: nil},
+			exp: http.Header{},
+		},
+		"empty cookie jar": {
+			in: &Client{HTTPClient: &http.Client{
+				Jar: EmptyCookieJar{},
+			}},
+			exp: http.Header{},
+		},
+		"one cookie": {
+			in: &Client{HTTPClient: &http.Client{
+				Jar: FakeCookieJar{
+					cookies: map[string]string{"key1": "value1"},
+				},
+			}},
+			exp: http.Header{
+				"Cookie": []string{"key1=value1"},
+			},
+		},
+		"three cookies": {
+			in: &Client{HTTPClient: &http.Client{
+				Jar: FakeCookieJar{
+					cookies: map[string]string{
+						"key1": "value1",
+						"key2": "value2",
+						"key3": "value3",
+					},
+				},
+			}},
+			exp: http.Header{
+				"Cookie": []string{
+					"key1=value1; key2=value2; key3=value3",
+				},
+			},
+		},
+		"one custom header": {
+			in: &Client{Headers: map[string]string{
+				"custom1": "value1",
+			}},
+			exp: http.Header{
+				"Custom1": []string{"value1"},
+			},
+		},
+		"three custom headers": {
+			in: &Client{Headers: map[string]string{
+				"custom1": "value1",
+				"custom2": "value2",
+				"custom3": "value3",
+			}},
+			exp: http.Header{
+				"Custom1": []string{"value1"},
+				"Custom2": []string{"value2"},
+				"Custom3": []string{"value3"},
+			},
+		},
+	}
+
+	for id, tc := range cases {
+		act := makeHeader(tc.in)
+
+		equals(t, id, tc.exp, act)
 	}
 }
