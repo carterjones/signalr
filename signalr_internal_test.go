@@ -388,7 +388,7 @@ func TestClient_readMessages(t *testing.T) {
 		// HACK: wait a whole bunch until it does what we want. This
 		// will need to be tuned depending on the CI tool and its
 		// resources.
-		timeout := 3 * time.Second
+		timeout := 5 * time.Second
 	loop:
 		for {
 			select {
