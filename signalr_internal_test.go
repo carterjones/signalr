@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -423,5 +424,72 @@ func TestPrefixedID(t *testing.T) {
 	for _, tc := range cases {
 		act := prefixedID(tc.in)
 		equals(t, tc.in, tc.exp, act)
+	}
+}
+
+func TestPrepareRequest(t *testing.T) {
+	cases := map[string]struct {
+		url     string
+		headers map[string]string
+		req     *http.Request
+		wantErr string
+	}{
+		"simple request with no headers": {
+			url:     "http://example.org",
+			headers: map[string]string{},
+			req: &http.Request{
+				Host:       "example.org",
+				Method:     "GET",
+				Proto:      "HTTP/1.1",
+				ProtoMajor: 1,
+				ProtoMinor: 1,
+				URL: &url.URL{
+					Scheme: "http",
+					Host:   "example.org",
+				},
+				Header: http.Header{},
+			},
+			wantErr: "",
+		},
+		"complex request with headers": {
+			url: "https://example.org/custom/path?param=123",
+			headers: map[string]string{
+				"header1": "value1",
+				"header2": "value2a,value2b",
+			},
+			req: &http.Request{
+				Host:       "example.org",
+				Method:     "GET",
+				Proto:      "HTTP/1.1",
+				ProtoMajor: 1,
+				ProtoMinor: 1,
+				URL: &url.URL{
+					Scheme:   "https",
+					Host:     "example.org",
+					Path:     "/custom/path",
+					RawQuery: "param=123",
+				},
+				Header: http.Header{
+					"Header1": []string{"value1"},
+					"Header2": []string{"value2a,value2b"},
+				},
+			},
+			wantErr: "",
+		},
+		"invalid URL": {
+			url:     ":",
+			headers: map[string]string{},
+			req:     nil,
+			wantErr: "missing protocol scheme",
+		},
+	}
+
+	for id, tc := range cases {
+		req, err := prepareRequest(tc.url, tc.headers)
+		equals(t, id, tc.req, req)
+
+		if tc.wantErr != "" {
+			testErrMatches(t, id, err, tc.wantErr)
+		}
 	}
 }

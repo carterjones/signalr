@@ -215,7 +215,7 @@ func (c *Client) makeURL(command string) (u url.URL) {
 	return
 }
 
-func (c *Client) prepareRequest(url string) (req *http.Request, err error) {
+func prepareRequest(url string, headers map[string]string) (req *http.Request, err error) {
 	req, err = http.NewRequest("GET", url, nil)
 	if err != nil {
 		err = errors.Wrap(err, "get request failed")
@@ -223,7 +223,7 @@ func (c *Client) prepareRequest(url string) (req *http.Request, err error) {
 	}
 
 	// Add all header values.
-	for k, v := range c.Headers {
+	for k, v := range headers {
 		req.Header.Add(k, v)
 	}
 
@@ -290,7 +290,7 @@ func (c *Client) Negotiate() (err error) {
 
 	for i := 0; i < c.MaxNegotiateRetries; i++ {
 		var req *http.Request
-		req, err = c.prepareRequest(u.String())
+		req, err = prepareRequest(u.String(), c.Headers)
 		if err != nil {
 			err = errors.Wrap(err, "request preparation failed")
 			return
@@ -522,7 +522,7 @@ func (c *Client) Start(conn WebsocketConn) (err error) {
 	u := c.makeURL("start")
 
 	var req *http.Request
-	req, err = c.prepareRequest(u.String())
+	req, err = prepareRequest(u.String(), c.Headers)
 	if err != nil {
 		err = errors.Wrap(err, "request preparation failed")
 		return
