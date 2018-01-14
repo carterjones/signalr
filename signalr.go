@@ -164,15 +164,15 @@ func prefixedID(ID string) string {
 
 // Conditionally encrypt the traffic depending on the initial
 // connection's encryption.
-func (c *Client) setWebsocketURLScheme(u *url.URL) {
-	if c.Scheme == HTTPS {
+func setWebsocketURLScheme(u *url.URL, httpScheme Scheme) {
+	if httpScheme == HTTPS {
 		u.Scheme = string(WSS)
 	} else {
 		u.Scheme = string(WS)
 	}
 }
 
-func (c *Client) makeURL(command string) (u url.URL) {
+func makeURL(command string, c *Client) (u url.URL) {
 	// Set the host.
 	u.Host = c.Host
 
@@ -196,11 +196,11 @@ func (c *Client) makeURL(command string) (u url.URL) {
 		u.Scheme = string(c.Scheme)
 		u.Path += "/negotiate"
 	case "connect":
-		c.setWebsocketURLScheme(&u)
+		setWebsocketURLScheme(&u, c.Scheme)
 		params.Set("transport", "webSockets")
 		u.Path += "/connect"
 	case "reconnect":
-		c.setWebsocketURLScheme(&u)
+		setWebsocketURLScheme(&u, c.Scheme)
 		params.Set("transport", "webSockets")
 		u.Path += "/reconnect"
 	case "start":
@@ -283,7 +283,7 @@ func (c *Client) Negotiate() (err error) {
 	c.ConnectionToken = ""
 
 	// Make a "negotiate" URL.
-	u := c.makeURL("negotiate")
+	u := makeURL("negotiate", c)
 
 	// Make a flag to use for indicating whether or not an error occurred.
 	errOccurred := false
@@ -345,7 +345,7 @@ func (c *Client) makeHeader() (header http.Header) {
 	if c.HTTPClient.Jar != nil {
 		// Make a negotiate URL so we can look up the cookie that was
 		// set on the negotiate request.
-		nu := c.makeURL("negotiate")
+		nu := makeURL("negotiate", c)
 		cookies := ""
 		for _, v := range c.HTTPClient.Jar.Cookies(&nu) {
 			if cookies == "" {
@@ -428,7 +428,7 @@ func (c *Client) Connect() (conn *websocket.Conn, err error) {
 	// -> returns connection ID. (e.g.: d-F2577E41-B,0|If60z,0|If600,1)
 
 	// Create the URL.
-	u := c.makeURL("connect")
+	u := makeURL("connect", c)
 
 	// Perform the connection.
 	conn, err = c.xconnect(u.String())
@@ -519,7 +519,7 @@ func (c *Client) Conn() WebsocketConn {
 
 // Start implements the start step of the SignalR connection sequence.
 func (c *Client) Start(conn WebsocketConn) (err error) {
-	u := c.makeURL("start")
+	u := makeURL("start", c)
 
 	var req *http.Request
 	req, err = prepareRequest(u.String(), c.Headers)
@@ -576,7 +576,7 @@ func (c *Client) Reconnect() (conn *websocket.Conn, err error) {
 	// Note: messageId matches connection ID returned from the connect request
 
 	// Create the URL.
-	u := c.makeURL("reconnect")
+	u := makeURL("reconnect", c)
 
 	// Perform the reconnection.
 	conn, err = c.xconnect(u.String())
