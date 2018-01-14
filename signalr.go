@@ -154,12 +154,12 @@ type Client struct {
 	done chan bool
 }
 
-func (c *Client) getCustomIDPrefix() string {
-	if c.CustomID == "" {
+func prefixedID(ID string) string {
+	if ID == "" {
 		return ""
 	}
 
-	return "[" + c.CustomID + "] "
+	return "[" + ID + "] "
 }
 
 // Conditionally encrypt the traffic depending on the initial
@@ -261,7 +261,7 @@ func (c *Client) processNegotiateResponse(resp *http.Response, errOccurred bool)
 		// If an error occurred earlier, and yet we got here,
 		// then we want to let the user know that the
 		// negotiation successfully recovered.
-		trace.DebugMessage("%sthe negotiate retry was successful", c.getCustomIDPrefix())
+		trace.DebugMessage("%sthe negotiate retry was successful", prefixedID(c.CustomID))
 	}
 
 	// Set the connection token and ID.
@@ -321,7 +321,7 @@ func (c *Client) Negotiate() (err error) {
 			fallthrough
 		default:
 			err = errors.Errorf("request failed: %s", resp.Status)
-			trace.DebugMessage("%snegotiate: retrying after %s", c.getCustomIDPrefix(), resp.Status)
+			trace.DebugMessage("%snegotiate: retrying after %s", prefixedID(c.CustomID), resp.Status)
 			errOccurred = true
 			time.Sleep(c.RetryWaitDuration)
 			continue
@@ -332,7 +332,7 @@ func (c *Client) Negotiate() (err error) {
 	}
 
 	if errOccurred {
-		trace.DebugMessage("%sthe negotiate retry was unsuccessful", c.getCustomIDPrefix())
+		trace.DebugMessage("%sthe negotiate retry was unsuccessful", prefixedID(c.CustomID))
 	}
 
 	return
@@ -644,7 +644,7 @@ func (c *Client) attemptReconnect(msgCh chan Message, errCh chan error) {
 	// Attempt to reconnect in a retry loop.
 	reconnected := false
 	for i := 0; i < c.MaxReconnectRetries; i++ {
-		trace.DebugMessage("%sattempting to reconnect...", c.getCustomIDPrefix())
+		trace.DebugMessage("%sattempting to reconnect...", prefixedID(c.CustomID))
 
 		var err error
 		_, err = c.Reconnect()
@@ -652,7 +652,7 @@ func (c *Client) attemptReconnect(msgCh chan Message, errCh chan error) {
 			continue
 		}
 
-		trace.DebugMessage("%sreconnected successfully", c.getCustomIDPrefix())
+		trace.DebugMessage("%sreconnected successfully", prefixedID(c.CustomID))
 		reconnected = true
 		break
 	}

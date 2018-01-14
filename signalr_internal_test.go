@@ -5,6 +5,9 @@ import (
 	"log"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
+	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +18,14 @@ import (
 
 func red(s string) string {
 	return "\033[31m" + s + "\033[39m"
+}
+
+func equals(tb testing.TB, id string, exp, act interface{}) {
+	if !reflect.DeepEqual(exp, act) {
+		_, file, line, _ := runtime.Caller(1)
+		tb.Errorf(red("%s:%d %s: \n\texp: %#v\n\tgot: %#v\n"),
+			filepath.Base(file), line, id, exp, act)
+	}
 }
 
 // Note: this is largely derived from
@@ -396,5 +407,21 @@ func TestClient_readMessages(t *testing.T) {
 
 		// Verify the results.
 		testErrMatches(t, id, err, tc.wantErr)
+	}
+}
+
+func TestPrefixedID(t *testing.T) {
+	cases := []struct {
+		in  string
+		exp string
+	}{
+		{"", ""},
+		{"123", "[123] "},
+		{"abc", "[abc] "},
+	}
+
+	for _, tc := range cases {
+		act := prefixedID(tc.in)
+		equals(t, tc.in, tc.exp, act)
 	}
 }
