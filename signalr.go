@@ -454,7 +454,7 @@ func (c *Client) processStartResponse(body io.ReadCloser, conn WebsocketConn) (e
 	defer func() {
 		derr := body.Close()
 		if derr != nil {
-			err = errors.Wrap(err, "close body failed")
+			err = errors.Wrapf(err, "close body failed | %v", derr)
 		}
 	}()
 

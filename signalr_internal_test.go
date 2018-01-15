@@ -676,13 +676,13 @@ func TestMakeHeader(t *testing.T) {
 	}
 }
 
-type fakeReaderCloser struct {
+type fakeReadCloser struct {
 	*bytes.Buffer
 	rerr error
 	cerr error
 }
 
-func (rc fakeReaderCloser) Read(p []byte) (int, error) {
+func (rc fakeReadCloser) Read(p []byte) (int, error) {
 	if rc.rerr != nil {
 		// Return a custom error for testing.
 		return 0, rc.rerr
@@ -693,7 +693,7 @@ func (rc fakeReaderCloser) Read(p []byte) (int, error) {
 	return rc.Buffer.Read(p)
 }
 
-func (rc fakeReaderCloser) Close() error {
+func (rc fakeReadCloser) Close() error {
 	return rc.cerr
 }
 
@@ -704,57 +704,57 @@ func TestProcessStartResponse(t *testing.T) {
 		wantErr string
 	}{
 		"read failure": {
-			body: &fakeReaderCloser{
+			body: &fakeReadCloser{
 				rerr: errors.New("fake read error"),
 			},
 			conn:    &fakeConn{},
-			wantErr: "read failed",
+			wantErr: "read failed: fake read error",
 		},
 		"deferred close failure": {
-			body: &fakeReaderCloser{
+			body: &fakeReadCloser{
 				rerr: errors.New("fake read error"),
 				cerr: errors.New("fake close error"),
 			},
 			conn:    &fakeConn{},
-			wantErr: "close body failed",
+			wantErr: "close body failed | fake close error: read failed: fake read error",
 		},
 		"invalid json in response": {
-			body:    fakeReaderCloser{Buffer: bytes.NewBufferString("invalid json")},
+			body:    fakeReadCloser{Buffer: bytes.NewBufferString("invalid json")},
 			conn:    &fakeConn{},
 			wantErr: "json unmarshal failed: invalid character 'i' looking for beginning of value",
 		},
 		"non-started response 1": {
-			body:    fakeReaderCloser{Buffer: bytes.NewBufferString(`{"hello":"world"}`)},
+			body:    fakeReadCloser{Buffer: bytes.NewBufferString(`{"hello":"world"}`)},
 			conn:    &fakeConn{},
 			wantErr: `start response is not 'started'`,
 		},
 		"non-stared response 2": {
-			body:    fakeReaderCloser{Buffer: bytes.NewBufferString(`{"Response":"blabla"}`)},
+			body:    fakeReadCloser{Buffer: bytes.NewBufferString(`{"Response":"blabla"}`)},
 			conn:    &fakeConn{},
 			wantErr: `start response is not 'started'`,
 		},
 		"readmessage failure": {
-			body:    fakeReaderCloser{Buffer: bytes.NewBufferString(`{"Response":"started"}`)},
+			body:    fakeReadCloser{Buffer: bytes.NewBufferString(`{"Response":"started"}`)},
 			conn:    &fakeConn{err: errors.New("fake read error")},
 			wantErr: "message read failed: fake read error",
 		},
 		"wrong message type": {
-			body:    fakeReaderCloser{Buffer: bytes.NewBufferString(`{"Response":"started"}`)},
+			body:    fakeReadCloser{Buffer: bytes.NewBufferString(`{"Response":"started"}`)},
 			conn:    &fakeConn{msgType: 9001},
 			wantErr: "unexpected websocket control type: 9001",
 		},
 		"message json unmarshal failure": {
-			body:    fakeReaderCloser{Buffer: bytes.NewBufferString(`{"Response":"started"}`)},
+			body:    fakeReadCloser{Buffer: bytes.NewBufferString(`{"Response":"started"}`)},
 			conn:    &fakeConn{msgType: 1, msg: "invalid json"},
 			wantErr: "json unmarshal failed: invalid character 'i' looking for beginning of value",
 		},
 		"server not initialized": {
-			body:    fakeReaderCloser{Buffer: bytes.NewBufferString(`{"Response":"started"}`)},
+			body:    fakeReadCloser{Buffer: bytes.NewBufferString(`{"Response":"started"}`)},
 			conn:    &fakeConn{msgType: 1, msg: `{"S":9002}`},
 			wantErr: `unexpected S value received from server: 9002 | message: {"S":9002}`,
 		},
 		"successful call": {
-			body:    fakeReaderCloser{Buffer: bytes.NewBufferString(`{"Response":"started"}`)},
+			body:    fakeReadCloser{Buffer: bytes.NewBufferString(`{"Response":"started"}`)},
 			conn:    &fakeConn{msgType: 1, msg: `{"S":1}`},
 			wantErr: "",
 		},
