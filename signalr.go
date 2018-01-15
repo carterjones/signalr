@@ -7,6 +7,7 @@ package signalr
 import (
 	"crypto/tls"
 	"encoding/json"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -448,16 +449,16 @@ func (c *Client) Connect() (conn *websocket.Conn, err error) {
 	return
 }
 
-func (c *Client) processStartResponse(resp *http.Response, conn WebsocketConn) (err error) {
+func (c *Client) processStartResponse(body io.ReadCloser, conn WebsocketConn) (err error) {
 	defer func() {
-		derr := resp.Body.Close()
+		derr := body.Close()
 		if derr != nil {
 			err = errors.Wrap(err, "close body failed")
 		}
 	}()
 
-	var body []byte
-	body, err = ioutil.ReadAll(resp.Body)
+	var data []byte
+	data, err = ioutil.ReadAll(body)
 	if err != nil {
 		err = errors.Wrap(err, "read failed")
 		return
@@ -465,7 +466,7 @@ func (c *Client) processStartResponse(resp *http.Response, conn WebsocketConn) (
 
 	// Create an anonymous struct to parse the response.
 	parsed := struct{ Response string }{}
-	err = json.Unmarshal(body, &parsed)
+	err = json.Unmarshal(data, &parsed)
 	if err != nil {
 		err = errors.Wrap(err, "json unmarshal failed")
 		return
@@ -561,7 +562,7 @@ func (c *Client) Start(conn WebsocketConn) (err error) {
 		return
 	}
 
-	err = c.processStartResponse(resp, conn)
+	err = c.processStartResponse(resp.Body, conn)
 	return
 }
 

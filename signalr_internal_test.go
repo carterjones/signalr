@@ -1,7 +1,9 @@
 package signalr
 
 import (
+	"bytes"
 	"crypto/x509"
+	"io"
 	"log"
 	"net/http"
 	"net/http/httptest"
@@ -154,11 +156,28 @@ func start(w http.ResponseWriter, r *http.Request) {
 }
 
 type fakeConn struct {
-	errs chan error
+	err     error
+	errs    chan error
+	msgType int
+	msg     string
 }
 
-func (c *fakeConn) ReadMessage() (messageType int, p []byte, err error) {
-	err = <-c.errs
+func (c *fakeConn) ReadMessage() (msgType int, p []byte, err error) {
+	// Default to using the errs channel.
+	if c.errs != nil {
+		err = <-c.errs
+		return
+	}
+
+	// Otherwise use a static error.
+	err = c.err
+
+	// Set the message type.
+	msgType = c.msgType
+
+	// Set the message.
+	p = []byte(c.msg)
+
 	return
 }
 
@@ -169,6 +188,7 @@ func (c *fakeConn) WriteJSON(v interface{}) (err error) {
 func newFakeConn() *fakeConn {
 	c := new(fakeConn)
 	c.errs = make(chan error)
+	c.msgType = websocket.TextMessage
 	return c
 }
 
@@ -653,5 +673,103 @@ func TestMakeHeader(t *testing.T) {
 		act := makeHeader(tc.in)
 
 		equals(t, id, tc.exp, act)
+	}
+}
+
+type fakeReaderCloser struct {
+	*bytes.Buffer
+	rerr error
+	cerr error
+}
+
+func (rc fakeReaderCloser) Read(p []byte) (int, error) {
+	if rc.rerr != nil {
+		// Return a custom error for testing.
+		return 0, rc.rerr
+	}
+
+	// Return the custom data for testing. Ignore the data sent to this
+	// function.
+	return rc.Buffer.Read(p)
+}
+
+func (rc fakeReaderCloser) Close() error {
+	return rc.cerr
+}
+
+func TestProcessStartResponse(t *testing.T) {
+	cases := map[string]struct {
+		body    io.ReadCloser
+		conn    WebsocketConn
+		wantErr string
+	}{
+		"read failure": {
+			body: &fakeReaderCloser{
+				rerr: errors.New("fake read error"),
+			},
+			conn:    &fakeConn{},
+			wantErr: "read failed",
+		},
+		"deferred close failure": {
+			body: &fakeReaderCloser{
+				rerr: errors.New("fake read error"),
+				cerr: errors.New("fake close error"),
+			},
+			conn:    &fakeConn{},
+			wantErr: "close body failed",
+		},
+		"invalid json in response": {
+			body:    fakeReaderCloser{Buffer: bytes.NewBufferString("invalid json")},
+			conn:    &fakeConn{},
+			wantErr: "json unmarshal failed: invalid character 'i' looking for beginning of value",
+		},
+		"non-started response 1": {
+			body:    fakeReaderCloser{Buffer: bytes.NewBufferString(`{"hello":"world"}`)},
+			conn:    &fakeConn{},
+			wantErr: `start response is not 'started'`,
+		},
+		"non-stared response 2": {
+			body:    fakeReaderCloser{Buffer: bytes.NewBufferString(`{"Response":"blabla"}`)},
+			conn:    &fakeConn{},
+			wantErr: `start response is not 'started'`,
+		},
+		"readmessage failure": {
+			body:    fakeReaderCloser{Buffer: bytes.NewBufferString(`{"Response":"started"}`)},
+			conn:    &fakeConn{err: errors.New("fake read error")},
+			wantErr: "message read failed: fake read error",
+		},
+		"wrong message type": {
+			body:    fakeReaderCloser{Buffer: bytes.NewBufferString(`{"Response":"started"}`)},
+			conn:    &fakeConn{msgType: 9001},
+			wantErr: "unexpected websocket control type: 9001",
+		},
+		"message json unmarshal failure": {
+			body:    fakeReaderCloser{Buffer: bytes.NewBufferString(`{"Response":"started"}`)},
+			conn:    &fakeConn{msgType: 1, msg: "invalid json"},
+			wantErr: "json unmarshal failed: invalid character 'i' looking for beginning of value",
+		},
+		"server not initialized": {
+			body:    fakeReaderCloser{Buffer: bytes.NewBufferString(`{"Response":"started"}`)},
+			conn:    &fakeConn{msgType: 1, msg: `{"S":9002}`},
+			wantErr: `unexpected S value received from server: 9002 | message: {"S":9002}`,
+		},
+		"successful call": {
+			body:    fakeReaderCloser{Buffer: bytes.NewBufferString(`{"Response":"started"}`)},
+			conn:    &fakeConn{msgType: 1, msg: `{"S":1}`},
+			wantErr: "",
+		},
+	}
+
+	for id, tc := range cases {
+		// Make a new client.
+		c := New("", "", "", "")
+
+		err := c.processStartResponse(tc.body, tc.conn)
+
+		if tc.wantErr != "" {
+			testErrMatches(t, id, err, tc.wantErr)
+		} else {
+			equals(t, id, tc.conn, c.conn)
+		}
 	}
 }
