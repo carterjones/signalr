@@ -371,9 +371,9 @@ func TestClient_readMessages(t *testing.T) {
 		fconn := newFakeConn()
 
 		// Pipe errors to the connection.
+		inErrs := tc.inErrs()
 		go func() {
-			errs := tc.inErrs()
-			for tErr := range errs {
+			for tErr := range inErrs {
 				fconn.errs <- errors.New(tErr)
 			}
 
