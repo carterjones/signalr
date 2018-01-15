@@ -3,9 +3,6 @@ sudo: false
 go:
   - 1.9.x
 
-before_install:
-  - go get -t -v ./...
-
 before_script:
   - curl -L https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64 > ./cc-test-reporter
   - chmod +x ./cc-test-reporter
@@ -14,6 +11,7 @@ before_script:
 script:
   - ./lint.sh
   - ./test.sh
+  - ./cover.sh
 
 after_script:
   - ./cc-test-reporter after-build -t gocov --exit-code $TRAVIS_TEST_RESULT
