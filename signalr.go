@@ -232,6 +232,13 @@ func prepareRequest(url string, headers map[string]string) (req *http.Request, e
 }
 
 func (c *Client) processNegotiateResponse(body io.ReadCloser) (err error) {
+	defer func() {
+		derr := body.Close()
+		if derr != nil {
+			err = errors.Wrapf(err, "close body failed | %v", derr)
+		}
+	}()
+
 	var data []byte
 	data, err = ioutil.ReadAll(body)
 	if err != nil {
