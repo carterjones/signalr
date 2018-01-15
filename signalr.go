@@ -305,13 +305,6 @@ func (c *Client) Negotiate() (err error) {
 			return
 		}
 
-		defer func() {
-			derr := resp.Body.Close()
-			if derr != nil {
-				err = errors.Wrap(err, derr.Error())
-			}
-		}()
-
 		// Perform operations specific to the status code.
 		switch resp.StatusCode {
 		case 200:
