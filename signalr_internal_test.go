@@ -773,3 +773,60 @@ func TestProcessStartResponse(t *testing.T) {
 		}
 	}
 }
+
+func TestProcessNegotiateResponse(t *testing.T) {
+	cases := map[string]struct {
+		body            io.ReadCloser
+		connectionToken string
+		connectionID    string
+		protocol        string
+		endpoint        string
+		wantErr         string
+	}{
+		"read failure": {
+			body:    fakeReadCloser{rerr: errors.New("fake read error")},
+			wantErr: "read failed: fake read error",
+		},
+		"deferred close failure": {
+			body: &fakeReadCloser{
+				rerr: errors.New("fake read error"),
+				cerr: errors.New("fake close error"),
+			},
+			wantErr: "close body failed | fake close error: read failed: fake read error",
+		},
+		"empty json": {
+			body:    fakeReadCloser{Buffer: bytes.NewBufferString("")},
+			wantErr: "json unmarshal failed: unexpected end of JSON input",
+		},
+		"invalid json": {
+			body:    fakeReadCloser{Buffer: bytes.NewBufferString("invalid json")},
+			wantErr: "json unmarshal failed: invalid character 'i' looking for beginning of value",
+		},
+		"valid data": {
+			body:            fakeReadCloser{Buffer: bytes.NewBufferString(`{"ConnectionToken":"123abc","ConnectionID":"456def","ProtocolVersion":"my-custom-protocol","Url":"super-awesome-signalr"}`)},
+			connectionToken: "123abc",
+			connectionID:    "456def",
+			protocol:        "my-custom-protocol",
+			endpoint:        "super-awesome-signalr",
+			wantErr:         "",
+		},
+	}
+
+	for id, tc := range cases {
+		// Create a test client.
+		c := New("", "", "", "")
+
+		// Get the result.
+		err := c.processNegotiateResponse(tc.body)
+
+		// Evaluate the result.
+		if tc.wantErr != "" {
+			testErrMatches(t, id, err, tc.wantErr)
+		} else {
+			equals(t, id, tc.connectionToken, c.ConnectionToken)
+			equals(t, id, tc.connectionID, c.ConnectionID)
+			equals(t, id, tc.protocol, c.Protocol)
+			equals(t, id, tc.endpoint, c.Endpoint)
+		}
+	}
+}
