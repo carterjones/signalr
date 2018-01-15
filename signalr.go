@@ -377,7 +377,7 @@ func makeHeader(c *Client) (header http.Header) {
 	return
 }
 
-func (c *Client) xconnect(url string) (conn *websocket.Conn, err error) {
+func (c *Client) xconnect(url string, isReconnect bool) (conn *websocket.Conn, err error) {
 	// Create a dialer that uses the supplied TLS client configuration.
 	dialer := &websocket.Dialer{
 		Proxy:           http.ProxyFromEnvironment,
@@ -387,8 +387,15 @@ func (c *Client) xconnect(url string) (conn *websocket.Conn, err error) {
 	// Prepare a header to be used when dialing to the service.
 	header := makeHeader(c)
 
+	var retryCount int
+	if isReconnect {
+		retryCount = c.MaxReconnectRetries
+	} else {
+		retryCount = c.MaxConnectRetries
+	}
+
 	// Perform the connection in a retry loop.
-	for i := 0; i < c.MaxConnectRetries; i++ {
+	for i := 0; i < retryCount; i++ {
 		var resp *http.Response
 		conn, resp, err = dialer.Dial(url, header)
 		if err == nil {
@@ -442,7 +449,7 @@ func (c *Client) Connect() (conn *websocket.Conn, err error) {
 	u := makeURL("connect", c)
 
 	// Perform the connection.
-	conn, err = c.xconnect(u.String())
+	conn, err = c.xconnect(u.String(), false)
 	if err != nil {
 		err = errors.Wrap(err, "xconnect failed")
 	}
@@ -599,7 +606,7 @@ func (c *Client) Reconnect() (conn *websocket.Conn, err error) {
 	u := makeURL("reconnect", c)
 
 	// Perform the reconnection.
-	conn, err = c.xconnect(u.String())
+	conn, err = c.xconnect(u.String(), true)
 	if err != nil {
 		err = errors.Wrap(err, "xconnect failed")
 		return
