@@ -529,22 +529,12 @@ func TestClient_Init(t *testing.T) {
 		c.RetryWaitDuration = 1 * time.Millisecond
 
 		// Initialize the client.
-		done := make(chan bool)
-		_, errs := c.Init()
+		_, _, err := c.Init()
 
 		if tc.wantErr != "" {
-			go func() {
-				select {
-				case err := <-errs:
-					errMatches(t, id, err, tc.wantErr)
-				case <-time.After(1 * time.Second):
-					t.Error("timeout during init test: " + id)
-				}
-
-				done <- true
-			}()
-
-			<-done
+			errMatches(t, id, err, tc.wantErr)
+		} else {
+			ok(t, id, err)
 		}
 	}
 }

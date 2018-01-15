@@ -622,7 +622,7 @@ func (c *Client) Reconnect() (conn *websocket.Conn, err error) {
 // that are part of the SignalR specification. It returns channels that:
 //  - receive messages from the websocket connection
 //  - receive errors encountered while processing the weblocket connection
-func (c *Client) Init() (msgCh chan Message, errCh chan error) {
+func (c *Client) Init() (msgCh chan Message, errCh chan error, err error) {
 	errCh = make(chan error)
 	msgCh = make(chan Message)
 
@@ -635,10 +635,9 @@ func (c *Client) Init() (msgCh chan Message, errCh chan error) {
 			done <- true
 		}()
 
-		err := c.Negotiate()
+		err = c.Negotiate()
 		if err != nil {
 			err = errors.Wrap(err, "negotiate failed")
-			go func() { errCh <- err }()
 			return
 		}
 
@@ -646,14 +645,12 @@ func (c *Client) Init() (msgCh chan Message, errCh chan error) {
 		conn, err = c.Connect()
 		if err != nil {
 			err = errors.Wrap(err, "connect failed")
-			go func() { errCh <- err }()
 			return
 		}
 
 		err = c.Start(conn)
 		if err != nil {
 			err = errors.Wrap(err, "start failed")
-			go func() { errCh <- err }()
 			return
 		}
 
@@ -673,9 +670,9 @@ func (c *Client) attemptReconnect(msgCh chan Message, errCh chan error) (ok bool
 	for i := 0; i < c.MaxReconnectRetries; i++ {
 		trace.DebugMessage("%sattempting to reconnect...", prefixedID(c.CustomID))
 
-		var err error
-		_, err = c.Reconnect()
+		_, err := c.Reconnect()
 		if err != nil {
+			// Ignore the value of the error and just continue.
 			continue
 		}
 
@@ -684,26 +681,13 @@ func (c *Client) attemptReconnect(msgCh chan Message, errCh chan error) (ok bool
 		break
 	}
 
-	// If the reconnect attempt succeeded, start the read message loop
-	// again and then exit.
+	// If the reconnect attempt succeeded, ignore the error. Since we are
+	// still within the readmessage loop, the next call to the WebSocket's
+	// ReadMessage() function will use the new c.conn connection, so we
+	// don't have to do any more connection repair.
 	if reconnected {
-		go c.readMessages(msgCh, errCh)
 		ok = true
-		return
 	}
-
-	// If the reconnect attempt failed, retry the init sequence again.
-	newMsgCh, newErrCh := c.Init()
-	go func() {
-		for {
-			select {
-			case msg := <-newMsgCh:
-				msgCh <- msg
-			case err := <-newErrCh:
-				errCh <- err
-			}
-		}
-	}()
 
 	return
 }
