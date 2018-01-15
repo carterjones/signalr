@@ -830,3 +830,32 @@ func TestProcessNegotiateResponse(t *testing.T) {
 		}
 	}
 }
+
+func TestClient_attemptReconnect(t *testing.T) {
+	cases := map[string]struct {
+		maxRetries int
+	}{
+		"successful reconnect": {
+			maxRetries: 5,
+		},
+		"unsuccessful reconnect": {
+			maxRetries: 0,
+		},
+	}
+
+	for _, tc := range cases {
+		// Create a test client.
+		c := New("", "", "", "")
+
+		// Set the maximum number of retries.
+		c.MaxReconnectRetries = tc.maxRetries
+		c.RetryWaitDuration = 1 * time.Millisecond
+
+		// Prepare message and error channels.
+		msgs := make(chan Message)
+		errs := make(chan error)
+
+		// Attempt to reconnect.
+		c.attemptReconnect(msgs, errs)
+	}
+}

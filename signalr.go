@@ -660,7 +660,7 @@ func (c *Client) Init() (msgCh chan Message, errCh chan error) {
 	return
 }
 
-func (c *Client) attemptReconnect(msgCh chan Message, errCh chan error) {
+func (c *Client) attemptReconnect(msgCh chan Message, errCh chan error) (ok bool) {
 	// Attempt to reconnect in a retry loop.
 	reconnected := false
 	for i := 0; i < c.MaxReconnectRetries; i++ {
@@ -681,6 +681,7 @@ func (c *Client) attemptReconnect(msgCh chan Message, errCh chan error) {
 	// again and then exit.
 	if reconnected {
 		go c.readMessages(msgCh, errCh)
+		ok = true
 		return
 	}
 
@@ -696,6 +697,8 @@ func (c *Client) attemptReconnect(msgCh chan Message, errCh chan error) {
 			}
 		}
 	}()
+
+	return
 }
 
 func errCode(err error) (code int) {
@@ -713,7 +716,7 @@ func errCode(err error) (code int) {
 	return
 }
 
-func (c *Client) processReadMessagesError(err error, msgCh chan Message, errCh chan error) {
+func (c *Client) processReadMessagesError(err error, msgCh chan Message, errCh chan error) (ok bool) {
 	// Handle various types of errors.
 	// https://tools.ietf.org/html/rfc6455#section-7.4.1
 	code := errCode(err)
@@ -726,10 +729,12 @@ func (c *Client) processReadMessagesError(err error, msgCh chan Message, errCh c
 		fallthrough
 	case 1006:
 		// abnormal closure
-		c.attemptReconnect(msgCh, errCh)
+		ok = c.attemptReconnect(msgCh, errCh)
 	default:
 		errCh <- err
 	}
+
+	return
 }
 
 func processReadMessagesMessage(p []byte, msgs chan Message, errs chan error) {
@@ -785,7 +790,7 @@ func (c *Client) readMessage(msgCh chan Message, errCh chan error) (ok bool) {
 
 	select {
 	case err := <-errs:
-		c.processReadMessagesError(err, msgCh, errCh)
+		ok = c.processReadMessagesError(err, msgCh, errCh)
 	case p := <-pCh:
 		processReadMessagesMessage(p, msgCh, errCh)
 	case <-c.done:
