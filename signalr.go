@@ -231,9 +231,9 @@ func prepareRequest(url string, headers map[string]string) (req *http.Request, e
 	return
 }
 
-func (c *Client) processNegotiateResponse(resp *http.Response, errOccurred bool) (err error) {
-	var body []byte
-	body, err = ioutil.ReadAll(resp.Body)
+func (c *Client) processNegotiateResponse(body io.ReadCloser, errOccurred bool) (err error) {
+	var data []byte
+	data, err = ioutil.ReadAll(body)
 	if err != nil {
 		err = errors.Wrap(err, "read failed")
 		return
@@ -252,7 +252,7 @@ func (c *Client) processNegotiateResponse(resp *http.Response, errOccurred bool)
 		TransportConnectTimeout float64
 		LongPollDelay           float64
 	}{}
-	err = json.Unmarshal(body, &parsed)
+	err = json.Unmarshal(data, &parsed)
 	if err != nil {
 		err = errors.Wrap(err, "json unmarshal failed")
 		return
@@ -328,7 +328,7 @@ func (c *Client) Negotiate() (err error) {
 			continue
 		}
 
-		err = c.processNegotiateResponse(resp, errOccurred)
+		err = c.processNegotiateResponse(resp.Body, errOccurred)
 		return
 	}
 
