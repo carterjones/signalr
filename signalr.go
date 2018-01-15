@@ -622,7 +622,7 @@ func (c *Client) Init() (msgCh chan Message, errCh chan error) {
 		err := c.Negotiate()
 		if err != nil {
 			err = errors.Wrap(err, "negotiate failed")
-			errCh <- err
+			go func() { errCh <- err }()
 			return
 		}
 
@@ -630,14 +630,14 @@ func (c *Client) Init() (msgCh chan Message, errCh chan error) {
 		conn, err = c.Connect()
 		if err != nil {
 			err = errors.Wrap(err, "connect failed")
-			errCh <- err
+			go func() { errCh <- err }()
 			return
 		}
 
 		err = c.Start(conn)
 		if err != nil {
 			err = errors.Wrap(err, "start failed")
-			errCh <- err
+			go func() { errCh <- err }()
 			return
 		}
 

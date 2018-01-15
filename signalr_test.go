@@ -459,23 +459,73 @@ func TestClient_Reconnect(t *testing.T) {
 }
 
 func TestClient_Init(t *testing.T) {
-	ts := newTestServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.Contains(r.URL.Path, "/negotiate") {
-			negotiate(w, r)
-		} else if strings.Contains(r.URL.Path, "/connect") {
-			connect(w, r)
-		} else if strings.Contains(r.URL.Path, "/start") {
-			start(w, r)
-		} else {
-			log.Println("url:", r.URL)
+	cases := map[string]struct {
+		negotiateFn func(http.ResponseWriter, *http.Request)
+		connectFn   func(http.ResponseWriter, *http.Request)
+		startFn     func(http.ResponseWriter, *http.Request)
+		wantErr     string
+	}{
+		"successful init": {
+			negotiateFn: negotiate,
+			connectFn:   connect,
+			startFn:     start,
+			wantErr:     "",
+		},
+		"failed negotiate": {
+			negotiateFn: func(w http.ResponseWriter, r *http.Request) {
+				w.Write([]byte("invalid json"))
+			},
+			wantErr: "json unmarshal failed: invalid character 'i' looking for beginning of value",
+		},
+		"failed connect": {
+			negotiateFn: negotiate,
+			connectFn:   throw123Error,
+			wantErr:     "connect failed: xconnect failed: 123 status code 123",
+		},
+		"failed start": {
+			negotiateFn: negotiate,
+			connectFn:   connect,
+			startFn:     throwMalformedStatusCodeError,
+			wantErr:     `malformed HTTP status code "9001"`,
+		},
+	}
+
+	for id, tc := range cases {
+		ts := newTestServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.Contains(r.URL.Path, "/negotiate") {
+				tc.negotiateFn(w, r)
+			} else if strings.Contains(r.URL.Path, "/connect") {
+				tc.connectFn(w, r)
+			} else if strings.Contains(r.URL.Path, "/start") {
+				tc.startFn(w, r)
+			} else {
+				log.Println("url:", r.URL)
+			}
+		}), true)
+		defer ts.Close()
+
+		c := newTestClient("1.5", "/signalr", "all the data", ts)
+		c.RetryWaitDuration = 1 * time.Millisecond
+
+		// Initialize the client.
+		done := make(chan bool)
+		_, errs := c.Init()
+
+		if tc.wantErr != "" {
+			go func() {
+				select {
+				case err := <-errs:
+					errMatches(t, id, err, tc.wantErr)
+				case <-time.After(1 * time.Second):
+					t.Error("timeout during init test: " + id)
+				}
+
+				done <- true
+			}()
+
+			<-done
 		}
-	}), true)
-	defer ts.Close()
-
-	c := newTestClient("1.5", "/signalr", "all the data", ts)
-
-	// Initialize the client.
-	c.Init()
+	}
 }
 
 type FakeConn struct {
