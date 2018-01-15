@@ -231,7 +231,7 @@ func prepareRequest(url string, headers map[string]string) (req *http.Request, e
 	return
 }
 
-func (c *Client) processNegotiateResponse(body io.ReadCloser, errOccurred bool) (err error) {
+func (c *Client) processNegotiateResponse(body io.ReadCloser) (err error) {
 	var data []byte
 	data, err = ioutil.ReadAll(body)
 	if err != nil {
@@ -256,13 +256,6 @@ func (c *Client) processNegotiateResponse(body io.ReadCloser, errOccurred bool) 
 	if err != nil {
 		err = errors.Wrap(err, "json unmarshal failed")
 		return
-	}
-
-	if errOccurred {
-		// If an error occurred earlier, and yet we got here,
-		// then we want to let the user know that the
-		// negotiation successfully recovered.
-		trace.DebugMessage("%sthe negotiate retry was successful", prefixedID(c.CustomID))
 	}
 
 	// Set the connection token and ID.
@@ -328,7 +321,15 @@ func (c *Client) Negotiate() (err error) {
 			continue
 		}
 
-		err = c.processNegotiateResponse(resp.Body, errOccurred)
+		err = c.processNegotiateResponse(resp.Body)
+
+		if errOccurred {
+			// If an error occurred earlier, and yet we got here,
+			// then we want to let the user know that the
+			// negotiation successfully recovered.
+			trace.DebugMessage("%sthe negotiate retry was successful", prefixedID(c.CustomID))
+		}
+
 		return
 	}
 
