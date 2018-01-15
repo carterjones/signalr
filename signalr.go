@@ -530,6 +530,10 @@ func (c *Client) Conn() WebsocketConn {
 
 // Start implements the start step of the SignalR connection sequence.
 func (c *Client) Start(conn WebsocketConn) (err error) {
+	if conn == nil {
+		return errors.New("connection is nil")
+	}
+
 	u := makeURL("start", c)
 
 	var req *http.Request
@@ -560,6 +564,11 @@ func (c *Client) Start(conn WebsocketConn) (err error) {
 	// If an error occurred on the last retry, then return.
 	if err != nil {
 		err = errors.Wrap(err, "all request retries failed")
+		return
+	}
+
+	if resp == nil {
+		err = errors.New("response is nil")
 		return
 	}
 

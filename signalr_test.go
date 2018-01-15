@@ -337,14 +337,20 @@ func TestClient_Connect(t *testing.T) {
 
 func TestClient_Start(t *testing.T) {
 	cases := map[string]struct {
-		startFn   http.HandlerFunc
-		connectFn http.HandlerFunc
-		scheme    signalr.Scheme
-		wantErr   string
+		skipConnect bool
+		skipRetries bool
+		startFn     http.HandlerFunc
+		connectFn   http.HandlerFunc
+		scheme      signalr.Scheme
+		wantErr     string
 	}{
 		"successful start": {
 			startFn:   start,
 			connectFn: connect,
+		},
+		"nil connection": {
+			skipConnect: true,
+			wantErr:     "connection is nil",
 		},
 		"failed get request": {
 			startFn:   throwMalformedStatusCodeError,
@@ -407,6 +413,12 @@ func TestClient_Start(t *testing.T) {
 			scheme:    ":",
 			wantErr:   "request preparation failed",
 		},
+		"empty response": {
+			skipRetries: true,
+			startFn:     start,
+			connectFn:   connect,
+			wantErr:     "response is nil",
+		},
 	}
 
 	for id, tc := range cases {
@@ -427,12 +439,21 @@ func TestClient_Start(t *testing.T) {
 		// Set the wait time to milliseconds.
 		c.RetryWaitDuration = 1 * time.Millisecond
 
+		// Don't perform any retries.
+		if tc.skipRetries {
+			c.MaxStartRetries = 0
+		}
+
 		// Perform the connection.
-		conn, err := c.Connect()
-		if err != nil {
-			// If this fails, it is not part of the test, so we
-			// panic here.
-			log.Panic(err)
+		var conn signalr.WebsocketConn
+		var err error
+		if !tc.skipConnect {
+			conn, err = c.Connect()
+			if err != nil {
+				// If this fails, it is not part of the test, so we
+				// panic here.
+				log.Panic(err)
+			}
 		}
 
 		// Set a custom scheme if one is specified.
