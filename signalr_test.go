@@ -109,9 +109,9 @@ func newTestServer(fn http.HandlerFunc, tls bool) (ts *httptest.Server) {
 	return
 }
 
-func newTestClient(protocol, endpoint, connectionData string, ts *httptest.Server, close <-chan struct{}) (c *signalr.Client) {
+func newTestClient(protocol, endpoint, connectionData string, ts *httptest.Server) (c *signalr.Client) {
 	// Prepare a SignalR client.
-	c = signalr.New(hostFromServerURL(ts.URL), protocol, endpoint, connectionData, close)
+	c = signalr.New(hostFromServerURL(ts.URL), protocol, endpoint, connectionData)
 	c.HTTPClient = ts.Client()
 
 	// Save the TLS config in case this is using TLS.
@@ -263,7 +263,7 @@ func TestClient_Negotiate(t *testing.T) {
 		defer ts.Close()
 
 		// Create a test client.
-		c := newTestClient(tc.in.Protocol, tc.in.Endpoint, tc.in.ConnectionData, ts, nil)
+		c := newTestClient(tc.in.Protocol, tc.in.Endpoint, tc.in.ConnectionData, ts)
 
 		// Set the wait time to milliseconds.
 		c.RetryWaitDuration = 1 * time.Millisecond
@@ -317,7 +317,7 @@ func TestClient_Connect(t *testing.T) {
 		defer ts.Close()
 
 		// Prepare a new client.
-		c := newTestClient("", "", "", ts, nil)
+		c := newTestClient("", "", "", ts)
 
 		// Set the wait time to milliseconds.
 		c.RetryWaitDuration = 1 * time.Millisecond
@@ -434,7 +434,7 @@ func TestClient_Start(t *testing.T) {
 		defer ts.Close()
 
 		// Create a test client and establish the initial connection.
-		c := newTestClient("", "", "", ts, nil)
+		c := newTestClient("", "", "", ts)
 
 		// Set the wait time to milliseconds.
 		c.RetryWaitDuration = 1 * time.Millisecond
@@ -525,7 +525,7 @@ func TestClient_Init(t *testing.T) {
 		}), true)
 		defer ts.Close()
 
-		c := newTestClient("1.5", "/signalr", "all the data", ts, nil)
+		c := newTestClient("1.5", "/signalr", "all the data", ts)
 		c.RetryWaitDuration = 1 * time.Millisecond
 
 		// Initialize the client.
@@ -584,7 +584,7 @@ func TestClient_Send(t *testing.T) {
 
 	for id, tc := range cases {
 		// Set up a new test client.
-		c := signalr.New("", "", "", "", nil)
+		c := signalr.New("", "", "", "")
 
 		// Set up a fake connection, if one has been created.
 		if tc.conn != nil {
@@ -614,7 +614,7 @@ func TestNew(t *testing.T) {
 	connectionData := "test-connection-data"
 
 	// Create the client.
-	c := signalr.New(host, protocol, endpoint, connectionData, nil)
+	c := signalr.New(host, protocol, endpoint, connectionData)
 
 	// Validate values were set up properly.
 	equals(t, "host", host, c.Host)

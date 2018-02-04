@@ -98,9 +98,9 @@ func newTestServer(fn http.HandlerFunc, tls bool) (ts *httptest.Server) {
 	return
 }
 
-func newTestClient(protocol, endpoint, connectionData string, ts *httptest.Server, close <-chan struct{}) (c *Client) {
+func newTestClient(protocol, endpoint, connectionData string, ts *httptest.Server) (c *Client) {
 	// Prepare a SignalR client.
-	c = New(hostFromServerURL(ts.URL), protocol, endpoint, connectionData, close)
+	c = New(hostFromServerURL(ts.URL), protocol, endpoint, connectionData)
 	c.HTTPClient = ts.Client()
 
 	// Save the TLS config in case this is using TLS.
@@ -370,8 +370,7 @@ func TestClient_readMessages(t *testing.T) { // nolint: gocyclo
 		defer ts.Close()
 
 		// Make a new client.
-		closeCh := make(chan struct{})
-		c := newTestClient("1.5", "/signalr", "all the data", ts, closeCh)
+		c := newTestClient("1.5", "/signalr", "all the data", ts)
 		c.RetryWaitDuration = 1 * time.Millisecond
 
 		// Perform the first part of the initialization routine.
@@ -393,7 +392,7 @@ func TestClient_readMessages(t *testing.T) { // nolint: gocyclo
 
 		var wg sync.WaitGroup
 		wg.Add(2)
-		go func(id string, inErrs chan string, closeCh chan struct{}, wantErr interface{}) {
+		go func(id string, inErrs chan string, wantErr interface{}) {
 			for tErr := range inErrs {
 				fconn.errs <- errors.New(tErr)
 			}
@@ -402,7 +401,7 @@ func TestClient_readMessages(t *testing.T) { // nolint: gocyclo
 			// If we don't expect any errors...
 			if wantErr == nil {
 				// Signal that the connection should close.
-				closeCh <- struct{}{}
+				c.Close()
 				logEvent("writer", id, "signaled to close channel (nil error expected)")
 
 				// Mark this goroutine as done.
@@ -415,9 +414,8 @@ func TestClient_readMessages(t *testing.T) { // nolint: gocyclo
 			// timeout signal so that we don't hold up the rest of
 			// the test suite.
 			time.Sleep(testTimeoutDuration)
-			close(timeoutCh)
 
-		}(id, inErrs, closeCh, tc.wantErr)
+		}(id, inErrs, tc.wantErr)
 
 		// Register the fake connection.
 		c.SetConn(fconn)
@@ -808,7 +806,7 @@ func TestProcessStartResponse(t *testing.T) {
 
 	for id, tc := range cases {
 		// Make a new client.
-		c := New("", "", "", "", nil)
+		c := New("", "", "", "")
 
 		err := c.processStartResponse(tc.body, tc.conn)
 
@@ -860,7 +858,7 @@ func TestProcessNegotiateResponse(t *testing.T) {
 
 	for id, tc := range cases {
 		// Create a test client.
-		c := New("", "", "", "", nil)
+		c := New("", "", "", "")
 
 		// Get the result.
 		err := c.processNegotiateResponse(tc.body)
@@ -891,7 +889,7 @@ func TestClient_attemptReconnect(t *testing.T) {
 
 	for _, tc := range cases {
 		// Create a test client.
-		c := New("", "", "", "", nil)
+		c := New("", "", "", "")
 
 		// Set the maximum number of retries.
 		c.MaxReconnectRetries = tc.maxRetries

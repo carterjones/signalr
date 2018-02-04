@@ -152,7 +152,7 @@ type Client struct {
 	conn    WebsocketConn
 	connMux sync.Mutex
 
-	close <-chan struct{}
+	close chan struct{}
 }
 
 func prefixedID(ID string) string {
@@ -824,8 +824,12 @@ func (c *Client) Send(m hubs.ClientMsg) (err error) {
 	return
 }
 
+func (c *Client) Close() {
+	close(c.close)
+}
+
 // New creates and initializes a SignalR client.
-func New(host, protocol, endpoint, connectionData string, close <-chan struct{}) (c *Client) {
+func New(host, protocol, endpoint, connectionData string) (c *Client) {
 	// Create the client.
 	c = new(Client)
 
@@ -834,7 +838,7 @@ func New(host, protocol, endpoint, connectionData string, close <-chan struct{})
 	c.Protocol = protocol
 	c.Endpoint = endpoint
 	c.ConnectionData = connectionData
-	c.close = close
+	c.close = make(chan struct{})
 
 	c.HTTPClient = new(http.Client)
 	c.Headers = make(map[string]string)
