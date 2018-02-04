@@ -824,8 +824,10 @@ func (c *Client) Send(m hubs.ClientMsg) (err error) {
 	return
 }
 
+// Close sends a signal to the loop reading WebSocket messages to indicate that
+// the loop should terminate.
 func (c *Client) Close() {
-	close(c.close)
+	c.close <- struct{}{}
 }
 
 // New creates and initializes a SignalR client.
