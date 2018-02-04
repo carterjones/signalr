@@ -427,7 +427,7 @@ func TestClient_readMessages(t *testing.T) { // nolint: gocyclo
 		go func(id string) {
 			// Process all messages. This will finish when the
 			// connection is closed.
-			c.readMessages(msgs, errs)
+			c.ReadMessages(msgs, errs)
 			logEvent("reader", id, "finished reading messages")
 
 			// At this point, the connection has been closed and the

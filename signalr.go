@@ -657,7 +657,7 @@ func (c *Client) Run() (msgCh chan Message, errCh chan error, err error) {
 		}
 
 		// Start the read message loop.
-		go c.readMessages(msgCh, errCh)
+		go c.ReadMessages(msgCh, errCh)
 	}()
 
 	// Wait for initialization goroutine to complete.
@@ -796,7 +796,10 @@ func (c *Client) readMessage(msgCh chan Message, errCh chan error) (ok bool) {
 	return
 }
 
-func (c *Client) readMessages(msgCh chan Message, errCh chan error) {
+// ReadMessages processes WebSocket messages from the underlying websocket
+// connection. When a message is processed, it is passed along the msgCh
+// channel. When an error ocurrs, it is sent along the errCh channel.
+func (c *Client) ReadMessages(msgCh chan Message, errCh chan error) {
 	for {
 		if !c.readMessage(msgCh, errCh) {
 			return
