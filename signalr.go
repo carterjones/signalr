@@ -1,7 +1,3 @@
-// Package signalr provides the client side implementation of the WebSocket
-// portion of the SignalR protocol. This was almost entirely written using
-// https://blog.3d-logic.com/2015/03/29/signalr-on-the-wire-an-informal-description-of-the-signalr-protocol/
-// as a reference guide.
 package signalr
 
 import (
