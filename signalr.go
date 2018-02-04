@@ -618,11 +618,11 @@ func (c *Client) Reconnect() (conn *websocket.Conn, err error) {
 	return
 }
 
-// Init connects to the host and performs the websocket initialization routines
+// Run connects to the host and performs the websocket initialization routines
 // that are part of the SignalR specification. It returns channels that:
 //  - receive messages from the websocket connection
 //  - receive errors encountered while processing the weblocket connection
-func (c *Client) Init() (msgCh chan Message, errCh chan error, err error) {
+func (c *Client) Run() (msgCh chan Message, errCh chan error, err error) {
 	errCh = make(chan error)
 	msgCh = make(chan Message)
 
@@ -632,6 +632,8 @@ func (c *Client) Init() (msgCh chan Message, errCh chan error, err error) {
 
 	go func() {
 		defer func() {
+			// Once this goroutine returns, indicate that it has
+			// finished executing.
 			done <- true
 		}()
 
@@ -658,7 +660,7 @@ func (c *Client) Init() (msgCh chan Message, errCh chan error, err error) {
 		go c.readMessages(msgCh, errCh)
 	}()
 
-	// Wait for success or failure.
+	// Wait for initialization goroutine to complete.
 	<-done
 
 	return

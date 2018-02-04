@@ -528,8 +528,8 @@ func TestClient_Init(t *testing.T) {
 		c := newTestClient("1.5", "/signalr", "all the data", ts)
 		c.RetryWaitDuration = 1 * time.Millisecond
 
-		// Initialize the client.
-		_, _, err := c.Init()
+		// Run the client.
+		_, _, err := c.Run()
 
 		if tc.wantErr != "" {
 			errMatches(t, id, err, tc.wantErr)
