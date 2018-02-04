@@ -18,6 +18,107 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+func ExampleClient_Run() {
+	// Prepare a SignalR client.
+	c := signalr.New("fake-server.definitely-not-real", "123", "my-endpoint", "special connection data")
+
+	// Start the connection.
+	msgs, errs, err := c.Run()
+	if err != nil {
+		log.Panic(err)
+	}
+
+	// Process messages and errors.
+	for {
+		select {
+		case msg := <-msgs:
+			// Handle the message.
+			log.Println(msg)
+		case err := <-errs:
+			// Handle the error.
+			log.Panic(err)
+		case <-time.After(2 * time.Second):
+			log.Println("exiting, since we haven't sente messages")
+		}
+	}
+}
+
+// This example shows the most basic way to start a websocket connection.
+func Example_basic() {
+	host := "myhost.not-real-tld"
+	protocol := "some-protocol-version-123"
+	endpoint := "/usually/something/like/this"
+	connectionData := `{"custom":"data"}`
+
+	// Prepare a SignalR client.
+	c := signalr.New(host, protocol, endpoint, connectionData)
+
+	// Start the connection.
+	msgs, errs, err := c.Run()
+	if err != nil {
+		log.Panic(err)
+	}
+
+	// Process messages and errors.
+	for {
+		select {
+		case msg := <-msgs:
+			// Handle the message.
+			log.Println(msg)
+		case err := <-errs:
+			// Handle the error.
+			log.Panic(err)
+		}
+	}
+}
+
+// This example shows how to manually perform each of the initialization steps.
+func Example_complex() {
+	host := "myhost.not-real-tld"
+	protocol := "some-protocol-version-123"
+	endpoint := "/usually/something/like/this"
+	connectionData := `{"custom":"data"}`
+
+	// Prepare a SignalR client.
+	c := signalr.New(host, protocol, endpoint, connectionData)
+
+	// Perform any optional modifications to the client here. Read the docs for
+	// all the available options that are exposed via public fields.
+
+	// Manually perform the initialization routine.
+	err := c.Negotiate()
+	if err != nil {
+		log.Panic(err)
+	}
+	conn, err := c.Connect()
+	if err != nil {
+		log.Panic(err)
+	}
+	err = c.Start(conn)
+	if err != nil {
+		log.Panic(err)
+	}
+
+	// Create message and error channels.
+	msgs := make(chan signalr.Message)
+	errs := make(chan error)
+
+	// Begin the message reading loop.
+	go c.ReadMessages(msgs, errs)
+
+	// Process messages and errors.
+	for {
+		select {
+		case msg := <-msgs:
+			// Handle the message.
+			log.Println(msg)
+		case err := <-errs:
+			// Handle the error.
+			log.Panic(err)
+		}
+	}
+}
+
 func red(s string) string {
 	return "\033[31m" + s + "\033[39m"
 }
