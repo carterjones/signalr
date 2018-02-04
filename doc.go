@@ -17,8 +17,5 @@ At a high level, the WebSocket portion of SignalR goes through the following ste
 	- start: make the WebSocket connection usable by SignalR connections
 
 See the provided examples for how to use this library.
-
-If anything is unclear or could be improved, please open an issue or submit a
-pull request. Thanks!
 */
 package signalr
