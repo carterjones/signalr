@@ -152,7 +152,7 @@ type Client struct {
 	conn    WebsocketConn
 	connMux sync.Mutex
 
-	done chan bool
+	close <-chan struct{}
 }
 
 func prefixedID(ID string) string {
@@ -784,9 +784,8 @@ func (c *Client) readMessage(msgCh chan Message, errCh chan error) (ok bool) {
 		ok = c.processReadMessagesError(err, msgCh, errCh)
 	case p := <-pCh:
 		processReadMessagesMessage(p, msgCh, errCh)
-	case <-c.done:
+	case <-c.close:
 		ok = false
-		go func() { c.done <- true }()
 	}
 
 	// Send a signal that the outer function is done processing.
@@ -825,23 +824,18 @@ func (c *Client) Send(m hubs.ClientMsg) (err error) {
 	return
 }
 
-// Close shuts down the connection.
-func (c *Client) Close() {
-	// Send a signal to shut down the connection.
-	c.done <- true
-
-	// Wait for confirmation that it is shut down.
-	<-c.done
-}
-
 // New creates and initializes a SignalR client.
-func New(host, protocol, endpoint, connectionData string) (c *Client) {
+func New(host, protocol, endpoint, connectionData string, close <-chan struct{}) (c *Client) {
+	// Create the client.
 	c = new(Client)
+
+	// Set the parameters that were passed in.
 	c.Host = host
 	c.Protocol = protocol
 	c.Endpoint = endpoint
 	c.ConnectionData = connectionData
-	c.done = make(chan bool)
+	c.close = close
+
 	c.HTTPClient = new(http.Client)
 	c.Headers = make(map[string]string)
 

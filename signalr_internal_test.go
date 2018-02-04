@@ -3,16 +3,19 @@ package signalr
 import (
 	"bytes"
 	"crypto/x509"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -95,9 +98,9 @@ func newTestServer(fn http.HandlerFunc, tls bool) (ts *httptest.Server) {
 	return
 }
 
-func newTestClient(protocol, endpoint, connectionData string, ts *httptest.Server) (c *Client) {
+func newTestClient(protocol, endpoint, connectionData string, ts *httptest.Server, close <-chan struct{}) (c *Client) {
 	// Prepare a SignalR client.
-	c = New(hostFromServerURL(ts.URL), protocol, endpoint, connectionData)
+	c = New(hostFromServerURL(ts.URL), protocol, endpoint, connectionData, close)
 	c.HTTPClient = ts.Client()
 
 	// Save the TLS config in case this is using TLS.
@@ -198,7 +201,27 @@ func panicErr(err error) {
 	}
 }
 
-func TestClient_readMessages(t *testing.T) {
+// Create a variable to store the logs that we will print after the tests
+// complete.
+var logs = ""
+var logsMux = sync.Mutex{}
+
+// Use a custom log function so that they can be enabled only when an
+// environment variable is set.
+func logEvent(section, id, msg string) {
+	logEvents := os.Getenv("LOG_EVENTS")
+	if logEvents != "" {
+		logsMux.Lock()
+		logs = logs + fmt.Sprintf("[%s | %s] %s\n", section, id, msg)
+		logsMux.Unlock()
+	}
+}
+
+// This is the amount of time to wait before failing a test. This way, some
+// tests that rely on concurrency don't hold up the whole test suite.
+const testTimeoutDuration = 5 * time.Second
+
+func TestClient_readMessages(t *testing.T) { // nolint: gocyclo
 	cases := map[string]struct {
 		inErrs  func() chan string
 		wantErr interface{}
@@ -247,6 +270,31 @@ func TestClient_readMessages(t *testing.T) {
 			},
 			"generic error",
 		},
+		"many generic errors": {
+			func() chan string {
+				errCh := make(chan string)
+				go func() {
+					for i := 0; i < 20; i++ {
+						errCh <- "generic error"
+					}
+					close(errCh)
+				}()
+				return errCh
+			},
+			"generic error",
+		},
+		"wait, then throw generic error": {
+			func() chan string {
+				errCh := make(chan string)
+				go func() {
+					time.Sleep(5 * time.Second)
+					errCh <- "generic error"
+					close(errCh)
+				}()
+				return errCh
+			},
+			"generic error",
+		},
 		"1001, then 1006 error": {
 			func() chan string {
 				errCh := make(chan string)
@@ -275,27 +323,11 @@ func TestClient_readMessages(t *testing.T) {
 			func() chan string {
 				errCh := make(chan string)
 				go func() {
-					errCh <- "websocket: close 1000 (normal)"
-					errCh <- "websocket: close 1001 (going away)"
-					errCh <- "websocket: close 1006 (abnormal closure)"
-					errCh <- "websocket: close 1000 (normal)"
-					errCh <- "websocket: close 1001 (going away)"
-					errCh <- "websocket: close 1006 (abnormal closure)"
-					errCh <- "websocket: close 1000 (normal)"
-					errCh <- "websocket: close 1001 (going away)"
-					errCh <- "websocket: close 1006 (abnormal closure)"
-					errCh <- "websocket: close 1000 (normal)"
-					errCh <- "websocket: close 1001 (going away)"
-					errCh <- "websocket: close 1006 (abnormal closure)"
-					errCh <- "websocket: close 1000 (normal)"
-					errCh <- "websocket: close 1001 (going away)"
-					errCh <- "websocket: close 1006 (abnormal closure)"
-					errCh <- "websocket: close 1000 (normal)"
-					errCh <- "websocket: close 1001 (going away)"
-					errCh <- "websocket: close 1006 (abnormal closure)"
-					errCh <- "websocket: close 1000 (normal)"
-					errCh <- "websocket: close 1001 (going away)"
-					errCh <- "websocket: close 1006 (abnormal closure)"
+					for i := 0; i < 5; i++ {
+						errCh <- "websocket: close 1000 (normal)"
+						errCh <- "websocket: close 1001 (going away)"
+						errCh <- "websocket: close 1006 (abnormal closure)"
+					}
 					close(errCh)
 				}()
 				return errCh
@@ -306,27 +338,11 @@ func TestClient_readMessages(t *testing.T) {
 			func() chan string {
 				errCh := make(chan string)
 				go func() {
-					errCh <- "websocket: close 1000 (normal)"
-					errCh <- "websocket: close 1001 (going away)"
-					errCh <- "websocket: close 1006 (abnormal closure)"
-					errCh <- "websocket: close 1000 (normal)"
-					errCh <- "websocket: close 1001 (going away)"
-					errCh <- "websocket: close 1006 (abnormal closure)"
-					errCh <- "websocket: close 1000 (normal)"
-					errCh <- "websocket: close 1001 (going away)"
-					errCh <- "websocket: close 1006 (abnormal closure)"
-					errCh <- "websocket: close 1000 (normal)"
-					errCh <- "websocket: close 1001 (going away)"
-					errCh <- "websocket: close 1006 (abnormal closure)"
-					errCh <- "websocket: close 1000 (normal)"
-					errCh <- "websocket: close 1001 (going away)"
-					errCh <- "websocket: close 1006 (abnormal closure)"
-					errCh <- "websocket: close 1000 (normal)"
-					errCh <- "websocket: close 1001 (going away)"
-					errCh <- "websocket: close 1006 (abnormal closure)"
-					errCh <- "websocket: close 1000 (normal)"
-					errCh <- "websocket: close 1001 (going away)"
-					errCh <- "websocket: close 1006 (abnormal closure)"
+					for i := 0; i < 5; i++ {
+						errCh <- "websocket: close 1000 (normal)"
+						errCh <- "websocket: close 1001 (going away)"
+						errCh <- "websocket: close 1006 (abnormal closure)"
+					}
 					errCh <- "generic error"
 					close(errCh)
 				}()
@@ -354,7 +370,8 @@ func TestClient_readMessages(t *testing.T) {
 		defer ts.Close()
 
 		// Make a new client.
-		c := newTestClient("1.5", "/signalr", "all the data", ts)
+		closeCh := make(chan struct{})
+		c := newTestClient("1.5", "/signalr", "all the data", ts, closeCh)
 		c.RetryWaitDuration = 1 * time.Millisecond
 
 		// Perform the first part of the initialization routine.
@@ -372,21 +389,35 @@ func TestClient_readMessages(t *testing.T) {
 
 		// Pipe errors to the connection.
 		inErrs := tc.inErrs()
-		go func() {
+		timeoutCh := make(chan struct{})
+
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func(id string, inErrs chan string, closeCh chan struct{}, wantErr interface{}) {
 			for tErr := range inErrs {
 				fconn.errs <- errors.New(tErr)
 			}
+			logEvent("writer", id, "finished sending errors")
 
-			// Wait a little bit for processing to complete.
-			//
-			// HACK: this could probably be solved with channel
-			// communication/signals, but I am bad at computer and
-			// can't figure it out.
-			time.Sleep(100 * time.Millisecond)
+			// If we don't expect any errors...
+			if wantErr == nil {
+				// Signal that the connection should close.
+				closeCh <- struct{}{}
+				logEvent("writer", id, "signaled to close channel (nil error expected)")
 
-			// Close the connection.
-			c.Close()
-		}()
+				// Mark this goroutine as done.
+				wg.Done()
+				logEvent("writer", id, "signaled done (nil error expected)")
+				return
+			}
+
+			// If we expect an error, then we wait and then send a
+			// timeout signal so that we don't hold up the rest of
+			// the test suite.
+			time.Sleep(testTimeoutDuration)
+			close(timeoutCh)
+
+		}(id, inErrs, closeCh, tc.wantErr)
 
 		// Register the fake connection.
 		c.SetConn(fconn)
@@ -394,21 +425,26 @@ func TestClient_readMessages(t *testing.T) {
 		// Test readMessages.
 		msgs := make(chan Message)
 		errs := make(chan error)
-		done := make(chan bool)
-		go func() {
+
+		go func(id string) {
 			// Process all messages. This will finish when the
 			// connection is closed.
 			c.readMessages(msgs, errs)
+			logEvent("reader", id, "finished reading messages")
 
 			// At this point, the connection has been closed and the
 			// done signal can be sent.
-			done <- true
+			wg.Done()
+			logEvent("reader", id, "signaled done")
+		}(id)
+
+		// Wait for both loops to be done. Then send the done signal.
+		done := make(chan struct{})
+		go func() {
+			wg.Wait()
+			close(done)
 		}()
 
-		// HACK: wait a whole bunch until it does what we want. This
-		// will need to be tuned depending on the CI tool and its
-		// resources.
-		timeout := 5 * time.Second
 	loop:
 		for {
 			select {
@@ -419,16 +455,26 @@ func TestClient_readMessages(t *testing.T) {
 				// consecutive failures.
 				go c.SetConn(fconn)
 			case err = <-errs:
+				logEvent("main  ", id, "err received. breaking.")
 				break loop
 			case <-done:
+				logEvent("main  ", id, "done received. breaking.")
 				break loop
-			case <-time.After(timeout):
+			case <-timeoutCh:
+				logEvent("main  ", id, "timeout received. breaking.")
 				break loop
 			}
 		}
 
 		// Verify the results.
 		testErrMatches(t, id, err, tc.wantErr)
+	}
+
+	// We print the accumulated logs because merely printing them to the
+	// screen as they occur tends to affect the timing of these tests, which
+	// results in hard to identify Heisenbugs.
+	if logs != "" {
+		fmt.Println(logs)
 	}
 }
 
@@ -762,7 +808,7 @@ func TestProcessStartResponse(t *testing.T) {
 
 	for id, tc := range cases {
 		// Make a new client.
-		c := New("", "", "", "")
+		c := New("", "", "", "", nil)
 
 		err := c.processStartResponse(tc.body, tc.conn)
 
@@ -814,7 +860,7 @@ func TestProcessNegotiateResponse(t *testing.T) {
 
 	for id, tc := range cases {
 		// Create a test client.
-		c := New("", "", "", "")
+		c := New("", "", "", "", nil)
 
 		// Get the result.
 		err := c.processNegotiateResponse(tc.body)
@@ -845,7 +891,7 @@ func TestClient_attemptReconnect(t *testing.T) {
 
 	for _, tc := range cases {
 		// Create a test client.
-		c := New("", "", "", "")
+		c := New("", "", "", "", nil)
 
 		// Set the maximum number of retries.
 		c.MaxReconnectRetries = tc.maxRetries
