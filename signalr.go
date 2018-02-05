@@ -5,14 +5,15 @@ import (
 	"encoding/json"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
 	"strconv"
 	"sync"
 	"time"
 
-	"github.com/carterjones/helpers/trace"
 	"github.com/carterjones/signalr/hubs"
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
@@ -149,6 +150,17 @@ type Client struct {
 	connMux sync.Mutex
 
 	close chan struct{}
+}
+
+func debugEnabled() bool {
+	v := os.Getenv("DEBUG")
+	return v != ""
+}
+
+func debugMessage(msg string, v ...interface{}) {
+	if debugEnabled() {
+		log.Printf(msg, v...)
+	}
 }
 
 func prefixedID(ID string) string {
@@ -311,7 +323,7 @@ func (c *Client) Negotiate() (err error) {
 			fallthrough
 		default:
 			err = errors.Errorf("request failed: %s", resp.Status)
-			trace.DebugMessage("%snegotiate: retrying after %s", prefixedID(c.CustomID), resp.Status)
+			debugMessage("%snegotiate: retrying after %s", prefixedID(c.CustomID), resp.Status)
 			errOccurred = true
 			time.Sleep(c.RetryWaitDuration)
 			continue
@@ -323,14 +335,14 @@ func (c *Client) Negotiate() (err error) {
 			// If an error occurred earlier, and yet we got here,
 			// then we want to let the user know that the
 			// negotiation successfully recovered.
-			trace.DebugMessage("%sthe negotiate retry was successful", prefixedID(c.CustomID))
+			debugMessage("%sthe negotiate retry was successful", prefixedID(c.CustomID))
 		}
 
 		return
 	}
 
 	if errOccurred {
-		trace.DebugMessage("%sthe negotiate retry was unsuccessful", prefixedID(c.CustomID))
+		debugMessage("%sthe negotiate retry was unsuccessful", prefixedID(c.CustomID))
 	}
 
 	return
@@ -666,7 +678,7 @@ func (c *Client) attemptReconnect(msgCh chan Message, errCh chan error) (ok bool
 	// Attempt to reconnect in a retry loop.
 	reconnected := false
 	for i := 0; i < c.MaxReconnectRetries; i++ {
-		trace.DebugMessage("%sattempting to reconnect...", prefixedID(c.CustomID))
+		debugMessage("%sattempting to reconnect...", prefixedID(c.CustomID))
 
 		_, err := c.Reconnect()
 		if err != nil {
@@ -674,7 +686,7 @@ func (c *Client) attemptReconnect(msgCh chan Message, errCh chan error) (ok bool
 			continue
 		}
 
-		trace.DebugMessage("%sreconnected successfully", prefixedID(c.CustomID))
+		debugMessage("%sreconnected successfully", prefixedID(c.CustomID))
 		reconnected = true
 		break
 	}
