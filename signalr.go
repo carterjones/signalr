@@ -65,6 +65,14 @@ type Message struct {
 
 	// groups token – an encrypted string representing group membership
 	G string
+
+	// other miscellaneous variables that sometimes are sent by the server
+	I string
+	E string
+	R json.RawMessage
+	H json.RawMessage // could be bool or string depending on a message type
+	D json.RawMessage
+	T json.RawMessage
 }
 
 // Scheme represents a type of transport scheme. For the purposes of this
@@ -740,7 +748,7 @@ func (c *Client) processReadMessagesError(err error, msgCh chan Message, errCh c
 
 func processReadMessagesMessage(p []byte, msgs chan Message, errs chan error) {
 	// Ignore KeepAlive messages.
-	if string(p) == "{}" {
+	if len(p) == 2 && p[0] == '{' && p[1] == '}' {
 		return
 	}
 
