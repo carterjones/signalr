@@ -2,7 +2,7 @@ version: 2
 jobs:
   build:
     docker:
-      - image: circleci/golang:1.9
+      - image: carterjones/infra-builder:latest
     working_directory: /go/src/github.com/carterjones/signalr
     steps:
       - checkout
