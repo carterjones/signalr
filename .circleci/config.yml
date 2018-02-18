@@ -7,4 +7,6 @@ jobs:
     steps:
       - checkout
       - run: go get -v -t -d ./...
-      - run: go test -v ./...
+      - run: ./lint.sh
+      - run: ./test.sh
+      - run: ./cover.sh
