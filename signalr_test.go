@@ -190,6 +190,8 @@ func hostFromServerURL(url string) (host string) {
 	return
 }
 
+var serverResponseWriteTimeout = 500 * time.Millisecond
+
 func newTestServer(fn http.HandlerFunc, tls bool) (ts *httptest.Server) {
 	if tls {
 		// Create the server.
@@ -206,6 +208,9 @@ func newTestServer(fn http.HandlerFunc, tls bool) (ts *httptest.Server) {
 		// Create the server.
 		ts = httptest.NewServer(fn)
 	}
+
+	// Set the write timeout so that we can test timeouts later on.
+	ts.Config.WriteTimeout = serverResponseWriteTimeout
 
 	return
 }
@@ -286,9 +291,8 @@ func throw404Error(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("404 error"))
 }
 
-func throwMalformedStatusCodeError(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(9001)
-	w.Write([]byte("malformed status code"))
+func causeWriteResponseTimeout(w http.ResponseWriter, r *http.Request) {
+	time.Sleep(3 * serverResponseWriteTimeout)
 }
 
 func TestClient_Negotiate(t *testing.T) {
@@ -343,10 +347,10 @@ func TestClient_Negotiate(t *testing.T) {
 			wantErr: "123 status code",
 		},
 		"failed get request": {
-			fn:      throwMalformedStatusCodeError,
+			fn:      causeWriteResponseTimeout,
 			in:      &signalr.Client{},
 			exp:     &signalr.Client{},
-			wantErr: "malformed HTTP status code",
+			wantErr: "EOF",
 		},
 		"invalid json": {
 			fn: func(w http.ResponseWriter, r *http.Request) {
@@ -454,9 +458,9 @@ func TestClient_Start(t *testing.T) {
 			wantErr:     "connection is nil",
 		},
 		"failed get request": {
-			startFn:   throwMalformedStatusCodeError,
+			startFn:   causeWriteResponseTimeout,
 			connectFn: connect,
-			wantErr:   "malformed HTTP status code",
+			wantErr:   "EOF",
 		},
 		"invalid json sent in response to get request": {
 			startFn: func(w http.ResponseWriter, r *http.Request) {
@@ -607,8 +611,8 @@ func TestClient_Init(t *testing.T) {
 		"failed start": {
 			negotiateFn: negotiate,
 			connectFn:   connect,
-			startFn:     throwMalformedStatusCodeError,
-			wantErr:     `malformed HTTP status code "9001"`,
+			startFn:     causeWriteResponseTimeout,
+			wantErr:     "EOF",
 		},
 	}
 
