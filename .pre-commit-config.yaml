@@ -16,3 +16,4 @@ repos:
         args:
         - --vendor
         - --cyclo-over=12
+        - --enable=nakedret

@@ -78,7 +78,9 @@ func hostFromServerURL(url string) (host string) {
 	return
 }
 
-func newTestServer(fn http.HandlerFunc, tls bool) (ts *httptest.Server) {
+func newTestServer(fn http.HandlerFunc, tls bool) *httptest.Server {
+	var ts *httptest.Server
+
 	if tls {
 		// Create the server.
 		ts = httptest.NewTLSServer(fn)
@@ -95,12 +97,12 @@ func newTestServer(fn http.HandlerFunc, tls bool) (ts *httptest.Server) {
 		ts = httptest.NewServer(fn)
 	}
 
-	return
+	return ts
 }
 
-func newTestClient(protocol, endpoint, connectionData string, ts *httptest.Server) (c *Client) {
+func newTestClient(protocol, endpoint, connectionData string, ts *httptest.Server) *Client {
 	// Prepare a SignalR client.
-	c = New(hostFromServerURL(ts.URL), protocol, endpoint, connectionData)
+	c := New(hostFromServerURL(ts.URL), protocol, endpoint, connectionData)
 	c.HTTPClient = ts.Client()
 
 	// Save the TLS config in case this is using TLS.
@@ -111,7 +113,7 @@ func newTestClient(protocol, endpoint, connectionData string, ts *httptest.Serve
 		c.Scheme = HTTP
 	}
 
-	return
+	return c
 }
 
 func negotiate(w http.ResponseWriter, r *http.Request) {
@@ -165,23 +167,22 @@ type fakeConn struct {
 	msg     string
 }
 
-func (c *fakeConn) ReadMessage() (msgType int, p []byte, err error) {
+func (c *fakeConn) ReadMessage() (int, []byte, error) {
+	// Set the message type.
+	msgType := c.msgType
+
+	// Set the message.
+	p := []byte(c.msg)
+
 	// Default to using the errs channel.
 	if c.errs != nil {
-		err = <-c.errs
-		return
+		return 0, nil, <-c.errs
 	}
 
 	// Otherwise use a static error.
-	err = c.err
+	err := c.err
 
-	// Set the message type.
-	msgType = c.msgType
-
-	// Set the message.
-	p = []byte(c.msg)
-
-	return
+	return msgType, p, err
 }
 
 func (c *fakeConn) WriteJSON(v interface{}) (err error) {
@@ -629,8 +630,8 @@ type FakeCookieJar struct {
 
 func (j FakeCookieJar) SetCookies(u *url.URL, cookies []*http.Cookie) {}
 
-func (j FakeCookieJar) Cookies(u *url.URL) (cookies []*http.Cookie) {
-	cookies = make([]*http.Cookie, len(j.cookies))
+func (j FakeCookieJar) Cookies(u *url.URL) []*http.Cookie {
+	cookies := make([]*http.Cookie, len(j.cookies))
 	i := 0
 	for k, v := range j.cookies {
 		cookies[i] = &http.Cookie{
@@ -639,11 +640,13 @@ func (j FakeCookieJar) Cookies(u *url.URL) (cookies []*http.Cookie) {
 		}
 		i++
 	}
+
 	// Sort it so the results are consistent.
 	sort.Slice(cookies, func(i, j int) bool {
 		return strings.Compare(cookies[i].Name, cookies[j].Name) < 0
 	})
-	return
+
+	return cookies
 }
 
 func TestMakeHeader(t *testing.T) {

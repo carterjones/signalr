@@ -193,9 +193,9 @@ func hostFromServerURL(url string) (host string) {
 
 var serverResponseWriteTimeout = 500 * time.Millisecond
 
-func newTestServer(fn http.HandlerFunc, useTLS bool) (ts *httptest.Server) {
+func newTestServer(fn http.HandlerFunc, useTLS bool) *httptest.Server {
 	// Create the server.
-	ts = httptest.NewUnstartedServer(fn)
+	ts := httptest.NewUnstartedServer(fn)
 
 	// Set the write timeout so that we can test timeouts later on.
 	ts.Config.WriteTimeout = serverResponseWriteTimeout
@@ -206,12 +206,12 @@ func newTestServer(fn http.HandlerFunc, useTLS bool) (ts *httptest.Server) {
 		ts.Start()
 	}
 
-	return
+	return ts
 }
 
-func newTestClient(protocol, endpoint, connectionData string, ts *httptest.Server) (c *signalr.Client) {
+func newTestClient(protocol, endpoint, connectionData string, ts *httptest.Server) *signalr.Client {
 	// Prepare a SignalR client.
-	c = signalr.New(hostFromServerURL(ts.URL), protocol, endpoint, connectionData)
+	c := signalr.New(hostFromServerURL(ts.URL), protocol, endpoint, connectionData)
 	c.HTTPClient = ts.Client()
 
 	// Save the TLS config in case this is using TLS.
@@ -224,7 +224,7 @@ func newTestClient(protocol, endpoint, connectionData string, ts *httptest.Serve
 		c.Scheme = signalr.HTTP
 	}
 
-	return
+	return c
 }
 
 func negotiate(w http.ResponseWriter, r *http.Request) {
@@ -715,15 +715,12 @@ func (c *FakeConn) ReadMessage() (messageType int, p []byte, err error) {
 	return
 }
 
-func (c *FakeConn) WriteJSON(v interface{}) (err error) {
+func (c *FakeConn) WriteJSON(v interface{}) error {
 	// Save the data that is supposedly being written, so it can be
 	// inspected later.
 	c.data = v
 
-	// Prepare the error to be returned.
-	err = c.err
-
-	return
+	return c.err
 }
 
 func TestClient_Send(t *testing.T) {
