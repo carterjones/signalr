@@ -5,8 +5,8 @@ repos:
     -   id: check-added-large-files
     -   id: check-yaml
     -   id: trailing-whitespace
--   repo: git://github.com/troian/pre-commit-golang
-    sha: c43dbbf0704e4c722e2b64672aaee689145e17a6
+-   repo: git://github.com/carterjones/pre-commit-golang
+    sha: ac63cdce000b849f008d20ed1fc611cbccb40c5b
     hooks:
     -   id: go-fmt
     -   id: go-vet
