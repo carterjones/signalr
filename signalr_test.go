@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -291,12 +292,19 @@ func causeWriteResponseTimeout(w http.ResponseWriter, r *http.Request) {
 }
 
 func TestClient_Negotiate(t *testing.T) {
+	// Make a requestID available to test cases in the event that multiple
+	// requests are sent that should have different responses based on which
+	// request is being sent.
+	var requestID int
+
 	cases := map[string]struct {
-		fn      http.HandlerFunc
-		in      *signalr.Client
-		TLS     bool
-		exp     *signalr.Client
-		wantErr string
+		fn       http.HandlerFunc
+		in       *signalr.Client
+		TLS      bool
+		exp      *signalr.Client
+		scheme   signalr.Scheme
+		useDebug bool
+		wantErr  string
 	}{
 		"successful http": {
 			fn: negotiate,
@@ -355,9 +363,54 @@ func TestClient_Negotiate(t *testing.T) {
 			exp:     &signalr.Client{},
 			wantErr: "invalid character 'i' looking for beginning of value",
 		},
+		"request preparation failure": {
+			fn:      negotiate,
+			in:      &signalr.Client{},
+			scheme:  ":",
+			exp:     &signalr.Client{},
+			wantErr: "request preparation failed",
+		},
+		"call debug messages": {
+			fn:       throw503Error,
+			in:       &signalr.Client{},
+			exp:      &signalr.Client{},
+			useDebug: true,
+			wantErr:  "503 Service Unavailable",
+		},
+		"recover after failure": {
+			fn: func(w http.ResponseWriter, r *http.Request) {
+				if requestID == 0 {
+					throw503Error(w, r)
+					requestID++
+				} else {
+					negotiate(w, r)
+				}
+			},
+			in: &signalr.Client{
+				Protocol:       "1337",
+				Endpoint:       "/signalr",
+				ConnectionData: "all the data",
+			},
+			TLS: false,
+			exp: &signalr.Client{
+				Protocol:        "1337",
+				Endpoint:        "/signalr",
+				ConnectionToken: "hello world",
+				ConnectionID:    "1234-ABC",
+				ConnectionData:  "",
+			},
+		},
 	}
 
 	for id, tc := range cases {
+		// Set the debug flag.
+		if tc.useDebug {
+			os.Setenv("DEBUG", "true")
+		}
+
+		// Reset the request ID.
+		requestID = 0
+
 		// Create a test server.
 		ts := newTestServer(http.HandlerFunc(tc.fn), tc.TLS)
 
@@ -366,6 +419,11 @@ func TestClient_Negotiate(t *testing.T) {
 
 		// Set the wait time to milliseconds.
 		c.RetryWaitDuration = 1 * time.Millisecond
+
+		// Set a custom scheme if one is specified.
+		if tc.scheme != "" {
+			c.Scheme = tc.scheme
+		}
 
 		// Perform the negotiation.
 		err := c.Negotiate()
@@ -384,6 +442,11 @@ func TestClient_Negotiate(t *testing.T) {
 		equals(t, id, tc.exp.Endpoint, c.Endpoint)
 
 		ts.Close()
+
+		// Unset the debug flag.
+		if tc.useDebug {
+			os.Unsetenv("DEBUG")
+		}
 	}
 }
 
