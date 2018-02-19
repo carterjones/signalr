@@ -253,7 +253,12 @@ func (c *Client) processNegotiateResponse(body io.ReadCloser) (err error) {
 	defer func() {
 		derr := body.Close()
 		if derr != nil {
-			err = errors.Wrapf(err, "close body failed | %v", derr)
+			if err != nil {
+				err = errors.Wrapf(err, "error in defer")
+				err = errors.Wrapf(err, derr.Error())
+			} else {
+				err = errors.Wrap(derr, "error in defer")
+			}
 		}
 	}()
 
@@ -480,7 +485,12 @@ func (c *Client) processStartResponse(body io.ReadCloser, conn WebsocketConn) (e
 	defer func() {
 		derr := body.Close()
 		if derr != nil {
-			err = errors.Wrapf(err, "close body failed | %v", derr)
+			if err != nil {
+				err = errors.Wrapf(err, "error in defer")
+				err = errors.Wrapf(err, derr.Error())
+			} else {
+				err = errors.Wrap(derr, "error in defer")
+			}
 		}
 	}()
 

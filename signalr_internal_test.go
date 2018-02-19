@@ -757,13 +757,21 @@ func TestProcessStartResponse(t *testing.T) {
 			conn:    &fakeConn{},
 			wantErr: "read failed: fake read error",
 		},
-		"deferred close failure": {
+		"deferred close failure after normal return": {
+			body: fakeReadCloser{
+				Buffer: bytes.NewBufferString(`{"Response":"started"}`),
+				cerr:   errors.New("fake close error"),
+			},
+			conn:    &fakeConn{msgType: 1, msg: `{"S":1}`},
+			wantErr: "error in defer: fake close error",
+		},
+		"deferred close failure after read failure": {
 			body: &fakeReadCloser{
 				rerr: errors.New("fake read error"),
 				cerr: errors.New("fake close error"),
 			},
 			conn:    &fakeConn{},
-			wantErr: "close body failed | fake close error: read failed: fake read error",
+			wantErr: "fake close error: error in defer: read failed: fake read error",
 		},
 		"invalid json in response": {
 			body:    fakeReadCloser{Buffer: bytes.NewBufferString("invalid json")},
@@ -834,12 +842,19 @@ func TestProcessNegotiateResponse(t *testing.T) {
 			body:    fakeReadCloser{rerr: errors.New("fake read error")},
 			wantErr: "read failed: fake read error",
 		},
-		"deferred close failure": {
+		"deferred close failure after normal return": {
+			body: fakeReadCloser{
+				Buffer: bytes.NewBufferString(`{"ConnectionToken":"123abc","ConnectionID":"456def","ProtocolVersion":"my-custom-protocol","Url":"super-awesome-signalr"}`),
+				cerr:   errors.New("fake close error"),
+			},
+			wantErr: "error in defer: fake close error",
+		},
+		"deferred close failure after read error": {
 			body: &fakeReadCloser{
 				rerr: errors.New("fake read error"),
 				cerr: errors.New("fake close error"),
 			},
-			wantErr: "close body failed | fake close error: read failed: fake read error",
+			wantErr: "fake close error: error in defer: read failed: fake read error",
 		},
 		"empty json": {
 			body:    fakeReadCloser{Buffer: bytes.NewBufferString("")},
