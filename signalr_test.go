@@ -1,7 +1,7 @@
 package signalr_test
 
 import (
-	"crypto/x509"
+	"crypto/tls"
 	"errors"
 	"log"
 	"net/http"
@@ -192,25 +192,18 @@ func hostFromServerURL(url string) (host string) {
 
 var serverResponseWriteTimeout = 500 * time.Millisecond
 
-func newTestServer(fn http.HandlerFunc, tls bool) (ts *httptest.Server) {
-	if tls {
-		// Create the server.
-		ts = httptest.NewTLSServer(fn)
-
-		// Save the testing certificate to the TLS client config.
-		//
-		// I'm not sure why ts.TLS doesn't contain certificate
-		// information. However, this seems to make the testing TLS
-		// certificate be trusted by the client.
-		ts.TLS.RootCAs = x509.NewCertPool()
-		ts.TLS.RootCAs.AddCert(ts.Certificate())
-	} else {
-		// Create the server.
-		ts = httptest.NewServer(fn)
-	}
+func newTestServer(fn http.HandlerFunc, useTLS bool) (ts *httptest.Server) {
+	// Create the server.
+	ts = httptest.NewUnstartedServer(fn)
 
 	// Set the write timeout so that we can test timeouts later on.
 	ts.Config.WriteTimeout = serverResponseWriteTimeout
+
+	if useTLS {
+		ts.StartTLS()
+	} else {
+		ts.Start()
+	}
 
 	return
 }
@@ -222,7 +215,9 @@ func newTestClient(protocol, endpoint, connectionData string, ts *httptest.Serve
 
 	// Save the TLS config in case this is using TLS.
 	if ts.TLS != nil {
-		c.TLSClientConfig = ts.TLS
+		// This is a local-only test, so we don't care about validating
+		// certificates. This simplifies things greatly.
+		c.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 		c.Scheme = signalr.HTTPS
 	} else {
 		c.Scheme = signalr.HTTP
@@ -365,7 +360,6 @@ func TestClient_Negotiate(t *testing.T) {
 	for id, tc := range cases {
 		// Create a test server.
 		ts := newTestServer(http.HandlerFunc(tc.fn), tc.TLS)
-		defer ts.Close()
 
 		// Create a test client.
 		c := newTestClient(tc.in.Protocol, tc.in.Endpoint, tc.in.ConnectionData, ts)
@@ -388,6 +382,8 @@ func TestClient_Negotiate(t *testing.T) {
 		equals(t, id, tc.exp.ConnectionID, c.ConnectionID)
 		equals(t, id, tc.exp.Protocol, c.Protocol)
 		equals(t, id, tc.exp.Endpoint, c.Endpoint)
+
+		ts.Close()
 	}
 }
 
@@ -419,7 +415,6 @@ func TestClient_Connect(t *testing.T) {
 
 	for id, tc := range cases {
 		ts := newTestServer(tc.fn, tc.TLS)
-		defer ts.Close()
 
 		// Prepare a new client.
 		c := newTestClient("", "", "", ts)
@@ -437,6 +432,8 @@ func TestClient_Connect(t *testing.T) {
 		}
 
 		notNil(t, id, conn)
+
+		ts.Close()
 	}
 }
 
@@ -536,7 +533,6 @@ func TestClient_Start(t *testing.T) {
 				tc.connectFn(w, r)
 			}
 		}, true)
-		defer ts.Close()
 
 		// Create a test client and establish the initial connection.
 		c := newTestClient("", "", "", ts)
@@ -578,6 +574,8 @@ func TestClient_Start(t *testing.T) {
 			ok(t, id, err)
 
 		}
+
+		ts.Close()
 	}
 }
 
@@ -628,7 +626,6 @@ func TestClient_Init(t *testing.T) {
 				log.Println("url:", r.URL)
 			}
 		}), true)
-		defer ts.Close()
 
 		c := newTestClient("1.5", "/signalr", "all the data", ts)
 		c.RetryWaitDuration = 1 * time.Millisecond
@@ -641,6 +638,8 @@ func TestClient_Init(t *testing.T) {
 		} else {
 			ok(t, id, err)
 		}
+
+		ts.Close()
 	}
 }
 
