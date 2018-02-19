@@ -1,0 +1,6 @@
+{
+    "files.exclude": {
+        "**/*.txt": true,
+        "**/*.out": true
+    }
+}
