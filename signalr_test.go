@@ -227,51 +227,6 @@ func newTestClient(protocol, endpoint, connectionData string, ts *httptest.Serve
 	return c
 }
 
-func negotiate(w http.ResponseWriter, r *http.Request) {
-	_, err := w.Write([]byte(`{"ConnectionToken":"hello world","ConnectionId":"1234-ABC","URL":"/signalr","ProtocolVersion":"1337"}`))
-	if err != nil {
-		log.Panic(err)
-	}
-}
-
-func connect(w http.ResponseWriter, r *http.Request) {
-	upgrader := websocket.Upgrader{}
-	c, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		log.Panic(err)
-	}
-
-	go func() {
-		for {
-			var msgType int
-			var bs []byte
-			var rerr error
-			msgType, bs, rerr = c.ReadMessage()
-			if rerr != nil {
-				return
-			}
-
-			log.Println(msgType, string(bs))
-		}
-	}()
-
-	go func() {
-		for {
-			werr := c.WriteMessage(websocket.TextMessage, []byte(`{"S":1}`))
-			if werr != nil {
-				return
-			}
-		}
-	}()
-}
-
-func start(w http.ResponseWriter, r *http.Request) {
-	_, err := w.Write([]byte(`{"Response":"started"}`))
-	if err != nil {
-		log.Panic(err)
-	}
-}
-
 func throw503Error(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusServiceUnavailable)
 	w.Write([]byte("503 error"))
@@ -307,7 +262,7 @@ func TestClient_Negotiate(t *testing.T) {
 		wantErr  string
 	}{
 		"successful http": {
-			fn: negotiate,
+			fn: signalr.TestNegotiate,
 			in: &signalr.Client{
 				Protocol:       "1337",
 				Endpoint:       "/signalr",
@@ -323,7 +278,7 @@ func TestClient_Negotiate(t *testing.T) {
 			},
 		},
 		"successful https": {
-			fn: negotiate,
+			fn: signalr.TestNegotiate,
 			in: &signalr.Client{
 				Protocol:       "1337",
 				Endpoint:       "/signalr",
@@ -364,7 +319,7 @@ func TestClient_Negotiate(t *testing.T) {
 			wantErr: "invalid character 'i' looking for beginning of value",
 		},
 		"request preparation failure": {
-			fn:      negotiate,
+			fn:      signalr.TestNegotiate,
 			in:      &signalr.Client{},
 			scheme:  ":",
 			exp:     &signalr.Client{},
@@ -383,7 +338,7 @@ func TestClient_Negotiate(t *testing.T) {
 					throw503Error(w, r)
 					requestID++
 				} else {
-					negotiate(w, r)
+					signalr.TestNegotiate(w, r)
 				}
 			},
 			in: &signalr.Client{
@@ -457,11 +412,11 @@ func TestClient_Connect(t *testing.T) {
 		wantErr string
 	}{
 		"successful https connect": {
-			fn:  connect,
+			fn:  signalr.TestConnect,
 			TLS: true,
 		},
 		"successful http connect": {
-			fn:  connect,
+			fn:  signalr.TestConnect,
 			TLS: false,
 		},
 		"service not available": {
@@ -510,8 +465,8 @@ func TestClient_Start(t *testing.T) {
 		wantErr     string
 	}{
 		"successful start": {
-			startFn:   start,
-			connectFn: connect,
+			startFn:   signalr.TestStart,
+			connectFn: signalr.TestConnect,
 		},
 		"nil connection": {
 			skipConnect: true,
@@ -519,25 +474,25 @@ func TestClient_Start(t *testing.T) {
 		},
 		"failed get request": {
 			startFn:   causeWriteResponseTimeout,
-			connectFn: connect,
+			connectFn: signalr.TestConnect,
 			wantErr:   "EOF",
 		},
 		"invalid json sent in response to get request": {
 			startFn: func(w http.ResponseWriter, r *http.Request) {
 				w.Write([]byte("invalid json"))
 			},
-			connectFn: connect,
+			connectFn: signalr.TestConnect,
 			wantErr:   "invalid character 'i' looking for beginning of value",
 		},
 		"non-'started' response": {
 			startFn: func(w http.ResponseWriter, r *http.Request) {
 				w.Write([]byte(`{"Response":"not expecting this"}`))
 			},
-			connectFn: connect,
+			connectFn: signalr.TestConnect,
 			wantErr:   "start response is not 'started': not expecting this",
 		},
 		"non-text message from websocket": {
-			startFn: start,
+			startFn: signalr.TestStart,
 			connectFn: func(w http.ResponseWriter, r *http.Request) {
 				upgrader := websocket.Upgrader{}
 				c, err := upgrader.Upgrade(w, r, nil)
@@ -549,7 +504,7 @@ func TestClient_Start(t *testing.T) {
 			wantErr: "unexpected websocket control type",
 		},
 		"invalid json sent in init message": {
-			startFn: start,
+			startFn: signalr.TestStart,
 			connectFn: func(w http.ResponseWriter, r *http.Request) {
 				upgrader := websocket.Upgrader{}
 				c, err := upgrader.Upgrade(w, r, nil)
@@ -561,7 +516,7 @@ func TestClient_Start(t *testing.T) {
 			wantErr: "invalid character 'i' looking for beginning of value",
 		},
 		"wrong S value from server": {
-			startFn: start,
+			startFn: signalr.TestStart,
 			connectFn: func(w http.ResponseWriter, r *http.Request) {
 				upgrader := websocket.Upgrader{}
 				c, err := upgrader.Upgrade(w, r, nil)
@@ -573,15 +528,15 @@ func TestClient_Start(t *testing.T) {
 			wantErr: "unexpected S value received from server",
 		},
 		"request preparation failure": {
-			startFn:   start,
-			connectFn: connect,
+			startFn:   signalr.TestStart,
+			connectFn: signalr.TestConnect,
 			scheme:    ":",
 			wantErr:   "request preparation failed",
 		},
 		"empty response": {
 			skipRetries: true,
-			startFn:     start,
-			connectFn:   connect,
+			startFn:     signalr.TestStart,
+			connectFn:   signalr.TestConnect,
 			wantErr:     "response is nil",
 		},
 	}
@@ -653,9 +608,9 @@ func TestClient_Init(t *testing.T) {
 		wantErr     string
 	}{
 		"successful init": {
-			negotiateFn: negotiate,
-			connectFn:   connect,
-			startFn:     start,
+			negotiateFn: signalr.TestNegotiate,
+			connectFn:   signalr.TestConnect,
+			startFn:     signalr.TestStart,
 			wantErr:     "",
 		},
 		"failed negotiate": {
@@ -665,13 +620,13 @@ func TestClient_Init(t *testing.T) {
 			wantErr: "json unmarshal failed: invalid character 'i' looking for beginning of value",
 		},
 		"failed connect": {
-			negotiateFn: negotiate,
+			negotiateFn: signalr.TestNegotiate,
 			connectFn:   throw123Error,
 			wantErr:     "connect failed: xconnect failed: 123 status code 123",
 		},
 		"failed start": {
-			negotiateFn: negotiate,
-			connectFn:   connect,
+			negotiateFn: signalr.TestNegotiate,
+			connectFn:   signalr.TestConnect,
 			startFn:     causeWriteResponseTimeout,
 			wantErr:     "EOF",
 		},
