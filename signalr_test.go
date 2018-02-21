@@ -247,6 +247,8 @@ func causeWriteResponseTimeout(w http.ResponseWriter, r *http.Request) {
 }
 
 func TestClient_Negotiate(t *testing.T) {
+	t.Parallel()
+
 	// Make a requestID available to test cases in the event that multiple
 	// requests are sent that should have different responses based on which
 	// request is being sent.
@@ -406,6 +408,8 @@ func TestClient_Negotiate(t *testing.T) {
 }
 
 func TestClient_Connect(t *testing.T) {
+	t.Parallel()
+
 	cases := map[string]struct {
 		fn      http.HandlerFunc
 		TLS     bool
@@ -456,6 +460,8 @@ func TestClient_Connect(t *testing.T) {
 }
 
 func TestClient_Start(t *testing.T) {
+	t.Parallel()
+
 	cases := map[string]struct {
 		skipConnect bool
 		skipRetries bool
@@ -598,9 +604,13 @@ func TestClient_Start(t *testing.T) {
 }
 
 func TestClient_Reconnect(t *testing.T) {
+	t.Parallel()
+
 }
 
 func TestClient_Init(t *testing.T) {
+	t.Parallel()
+
 	cases := map[string]struct {
 		negotiateFn func(http.ResponseWriter, *http.Request)
 		connectFn   func(http.ResponseWriter, *http.Request)
@@ -679,6 +689,8 @@ func (c *FakeConn) WriteJSON(v interface{}) error {
 }
 
 func TestClient_Send(t *testing.T) {
+	t.Parallel()
+
 	cases := map[string]struct {
 		conn    *FakeConn
 		err     error
@@ -726,6 +738,8 @@ func TestClient_Send(t *testing.T) {
 }
 
 func TestNew(t *testing.T) {
+	t.Parallel()
+
 	// Define parameter values.
 	host := "test-host"
 	protocol := "test-protocol"

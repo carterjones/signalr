@@ -223,6 +223,8 @@ func logEvent(section, id, msg string) {
 const testTimeoutDuration = 5 * time.Second
 
 func TestClient_readMessages(t *testing.T) { // nolint: gocyclo
+	t.Parallel()
+
 	cases := map[string]struct {
 		inErrs  func() chan string
 		wantErr interface{}
@@ -478,6 +480,8 @@ func TestClient_readMessages(t *testing.T) { // nolint: gocyclo
 }
 
 func TestPrefixedID(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		in  string
 		exp string
@@ -494,6 +498,8 @@ func TestPrefixedID(t *testing.T) {
 }
 
 func TestPrepareRequest(t *testing.T) {
+	t.Parallel()
+
 	cases := map[string]struct {
 		url     string
 		headers map[string]string
@@ -561,6 +567,8 @@ func TestPrepareRequest(t *testing.T) {
 }
 
 func TestProcessReadMessagesMessage(t *testing.T) {
+	t.Parallel()
+
 	cases := map[string]struct {
 		p       []byte
 		expMsg  *Message
@@ -650,6 +658,8 @@ func (j FakeCookieJar) Cookies(u *url.URL) []*http.Cookie {
 }
 
 func TestMakeHeader(t *testing.T) {
+	t.Parallel()
+
 	cases := map[string]struct {
 		in  *Client
 		exp http.Header
@@ -745,6 +755,8 @@ func (rc fakeReadCloser) Close() error {
 }
 
 func TestProcessStartResponse(t *testing.T) {
+	t.Parallel()
+
 	cases := map[string]struct {
 		body    io.ReadCloser
 		conn    WebsocketConn
@@ -830,6 +842,8 @@ func TestProcessStartResponse(t *testing.T) {
 }
 
 func TestProcessNegotiateResponse(t *testing.T) {
+	t.Parallel()
+
 	cases := map[string]struct {
 		body            io.ReadCloser
 		connectionToken string
@@ -894,6 +908,8 @@ func TestProcessNegotiateResponse(t *testing.T) {
 }
 
 func TestClient_attemptReconnect(t *testing.T) {
+	t.Parallel()
+
 	cases := map[string]struct {
 		maxRetries int
 	}{
