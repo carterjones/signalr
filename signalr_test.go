@@ -603,11 +603,6 @@ func TestClient_Start(t *testing.T) {
 	}
 }
 
-func TestClient_Reconnect(t *testing.T) {
-	t.Parallel()
-
-}
-
 func TestClient_Init(t *testing.T) {
 	t.Parallel()
 
