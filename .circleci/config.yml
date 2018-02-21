@@ -3,7 +3,7 @@ jobs:
   build:
     docker:
       - image: carterjones/infra-builder:latest
-    working_directory: /root/go/src/github.com/carterjones/signalr
+    working_directory: /go/src/github.com/carterjones/signalr
     steps:
       - checkout
       - run:
@@ -13,17 +13,14 @@ jobs:
             chmod +x ./cc-test-reporter
             ./cc-test-reporter before-build
       - run:
-          name: Download dependencies
-          command: go get -v -t -d ./...
-      - run:
           name: Run linters
-          command: ./lint.sh
+          command: make lint
       - run:
           name: Run tests
-          command: ./test.sh
+          command: make test
       - run:
           name: Generate code coverage statistics
           command: |
-            ./cover.sh
+            make cover
             ./cc-test-reporter after-build -t gocov --exit-code $?
             bash <(curl -s https://codecov.io/bash)
