@@ -16,3 +16,7 @@ lint:
 	--exclude "/usr/local/go/src/" \
 	--vendor \
 	./...
+
+update:
+	dep ensure -update
+	pre-commit autoupdate
