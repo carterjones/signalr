@@ -371,29 +371,13 @@ func makeHeader(c *Client) http.Header {
 		return http.Header{}
 	}
 
-	// Add cookies if they are set.
-	if c.HTTPClient != nil && c.HTTPClient.Jar != nil {
-		// Make a negotiate URL so we can look up the cookie that was
-		// set on the negotiate request.
-		nu := makeURL("negotiate", c)
-		cookies := ""
-		for _, v := range c.HTTPClient.Jar.Cookies(&nu) {
-			if cookies == "" {
-				cookies += v.Name + "=" + v.Value
-			} else {
-				cookies += "; " + v.Name + "=" + v.Value
-			}
-		}
-
-		if cookies != "" {
-			header.Add("Cookie", cookies)
-		}
-	}
-
 	// Add all the other header values specified by the user.
 	for k, v := range c.Headers {
 		header.Add(k, v)
 	}
+	//Add Referer from Negotiation url
+	nu := makeURL("negotiate", c)
+	header.Add("Referer", nu.String())
 
 	return header
 }
@@ -403,6 +387,7 @@ func (c *Client) xconnect(url string, isReconnect bool) (*websocket.Conn, error)
 	dialer := &websocket.Dialer{
 		Proxy:           http.ProxyFromEnvironment,
 		TLSClientConfig: c.TLSClientConfig,
+		Jar:             c.HTTPClient.Jar,
 	}
 
 	// Prepare a header to be used when dialing to the service.
