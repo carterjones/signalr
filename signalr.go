@@ -399,10 +399,18 @@ func makeHeader(c *Client) http.Header {
 }
 
 func (c *Client) xconnect(url string, isReconnect bool) (*websocket.Conn, error) {
+	// Prepare to use the existing HTTP client's cookie jar, if an HTTP client
+	// has been set.
+	var jar http.CookieJar
+	if c.HTTPClient != nil {
+		jar = c.HTTPClient.Jar
+	}
+
 	// Create a dialer that uses the supplied TLS client configuration.
 	dialer := &websocket.Dialer{
 		Proxy:           http.ProxyFromEnvironment,
 		TLSClientConfig: c.TLSClientConfig,
+		Jar:             jar,
 	}
 
 	// Prepare a header to be used when dialing to the service.

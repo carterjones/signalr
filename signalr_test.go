@@ -5,7 +5,9 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"net/http/cookiejar"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -413,6 +415,7 @@ func TestClient_Connect(t *testing.T) {
 	cases := map[string]struct {
 		fn      http.HandlerFunc
 		TLS     bool
+		cookies []*http.Cookie
 		wantErr string
 	}{
 		"successful https connect": {
@@ -433,23 +436,58 @@ func TestClient_Connect(t *testing.T) {
 			TLS:     true,
 			wantErr: "xconnect failed: 404 Not Found, retry 0: websocket: bad handshake",
 		},
+		"custom cookie jar": {
+			fn:  signalr.TestConnect,
+			TLS: false,
+			cookies: []*http.Cookie{&http.Cookie{
+				Name:  "hello",
+				Value: "world",
+			}},
+		},
 	}
 
 	for id, tc := range cases {
-		ts := newTestServer(tc.fn, tc.TLS)
+		// Make a cookie recording wrapper function.
+		done := make(chan struct{})
+		var cookies []*http.Cookie
+		recordCookies := func(w http.ResponseWriter, r *http.Request) {
+			cookies = r.Cookies()
+			tc.fn(w, r)
+			go func() { done <- struct{}{} }()
+		}
+
+		// Set up the test server.
+		ts := newTestServer(recordCookies, tc.TLS)
 
 		// Prepare a new client.
 		c := newTestClient("", "", "", ts)
+
+		// Set cookies if they have been configured.
+		if tc.cookies != nil {
+			u, err := url.Parse(ts.URL)
+			if err != nil {
+				log.Panic(err)
+			}
+			c.HTTPClient.Jar, err = cookiejar.New(nil)
+			if err != nil {
+				log.Panic(err)
+			}
+			c.HTTPClient.Jar.SetCookies(u, tc.cookies)
+		}
 
 		// Set the wait time to milliseconds.
 		c.RetryWaitDuration = 1 * time.Millisecond
 
 		// Perform the connection.
 		conn, err := c.Connect()
+		<-done
 
 		if tc.wantErr != "" {
 			errMatches(t, id, err, tc.wantErr)
 		} else {
+			if len(tc.cookies) > 0 {
+				equals(t, id, tc.cookies, cookies)
+			}
 			ok(t, id, err)
 		}
 
