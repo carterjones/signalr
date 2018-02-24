@@ -7,8 +7,108 @@
 # Overview
 
 This is my personal attempt at implementating the client side of the WebSocket
-portion of the SignalR protocol. I use it for various altcoin trading platforms
-that use SignalR.
+portion of the SignalR protocol. I use it for various virtual currency trading
+platforms that use SignalR.
+
+It supports CloudFlare-protected sites by default.
+
+## Example basic usage
+
+```go
+package main
+
+import (
+	"log"
+
+	"github.com/carterjones/signalr"
+)
+
+func main() {
+	host := "myhost.not-real-tld"
+	protocol := "some-protocol-version-123"
+	endpoint := "/usually/something/like/this"
+	connectionData := `{"custom":"data"}`
+
+	// Prepare a SignalR client.
+	c := signalr.New(host, protocol, endpoint, connectionData)
+
+	// Start the connection.
+	msgs, errs, err := c.Run()
+	if err != nil {
+		log.Panic(err)
+	}
+
+	// Process messages and errors.
+	for {
+		select {
+		case msg := <-msgs:
+			// Handle the message.
+			log.Println(msg)
+		case err := <-errs:
+			// Handle the error.
+			log.Panic(err)
+		}
+	}
+}
+```
+
+## Example complex usage
+
+```go
+package main
+
+import (
+	"log"
+
+	"github.com/carterjones/signalr"
+)
+
+func main() {
+	host := "myhost.not-real-tld"
+	protocol := "some-protocol-version-123"
+	endpoint := "/usually/something/like/this"
+	connectionData := `{"custom":"data"}`
+
+	// Prepare a SignalR client.
+	c := signalr.New(host, protocol, endpoint, connectionData)
+
+	// Perform any optional modifications to the client here. Read the docs for
+	// all the available options that are exposed via public fields.
+
+	// Manually perform the initialization routine.
+	err := c.Negotiate()
+	if err != nil {
+		log.Panic(err)
+	}
+	conn, err := c.Connect()
+	if err != nil {
+		log.Panic(err)
+	}
+	err = c.Start(conn)
+	if err != nil {
+		log.Panic(err)
+	}
+
+	// Create message and error channels.
+	msgs := make(chan signalr.Message)
+	errs := make(chan error)
+
+	// Begin the message reading loop.
+	go c.ReadMessages(msgs, errs)
+
+	// Process messages and errors.
+	for {
+		select {
+		case msg := <-msgs:
+			// Handle the message.
+			log.Println(msg)
+		case err := <-errs:
+			// Handle the error.
+			log.Panic(err)
+		}
+	}
+}
+```
 
 # Documentation
 

@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	scraper "github.com/carterjones/go-cloudflare-scraper"
 	"github.com/carterjones/signalr/hubs"
 	"github.com/gorilla/websocket"
 	"github.com/pkg/errors"
@@ -235,9 +236,10 @@ func makeURL(command string, c *Client) url.URL {
 }
 
 func prepareRequest(url string, headers map[string]string) (*http.Request, error) {
+	// Make the GET request object.
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		err = errors.Wrap(err, "get request failed")
+		err = errors.Wrap(err, "get request creation failed")
 		return nil, err
 	}
 
@@ -859,13 +861,21 @@ func (c *Client) Close() {
 
 // New creates and initializes a SignalR client.
 func New(host, protocol, endpoint, connectionData string) *Client {
+	// Create an HTTP client that supports CloudFlare-protected sites by
+	// default.
+	cfTransport := scraper.NewTransport(http.DefaultTransport)
+	httpClient := &http.Client{
+		Transport: cfTransport,
+		Jar:       cfTransport.Cookies,
+	}
+
 	return &Client{
 		Host:                host,
 		Protocol:            protocol,
 		Endpoint:            endpoint,
 		ConnectionData:      connectionData,
 		close:               make(chan struct{}),
-		HTTPClient:          new(http.Client),
+		HTTPClient:          httpClient,
 		Headers:             make(map[string]string),
 		Scheme:              HTTPS,
 		MaxNegotiateRetries: 5,
