@@ -4,8 +4,8 @@
 [[projects]]
   name = "github.com/carterjones/go-cloudflare-scraper"
   packages = ["."]
-  revision = "03b464379a5f6e612218c7104a7f7b2f3e4a1f58"
-  version = "v0.1.1"
+  revision = "e1c190340950851b5cd7fae8f809e091fa2daffd"
+  version = "v0.1.2"
 
 [[projects]]
   name = "github.com/gorilla/websocket"
@@ -45,6 +45,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "86e438679578e3216d3a1ff393dcc772b099d80c839b8c8392ff1016a0f1e19c"
+  inputs-digest = "56620f779974aea00af1d5867d72338294d0448462a39636d94295adcc959fb7"
   solver-name = "gps-cdcl"
   solver-version = 1

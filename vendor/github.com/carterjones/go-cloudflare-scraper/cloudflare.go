@@ -57,6 +57,10 @@ func (t Transport) RoundTrip(r *http.Request) (*http.Response, error) {
 		r.Header.Set("User-Agent", userAgent)
 	}
 
+	if r.Header.Get("Referer") == "" {
+		r.Header.Set("Referer", r.URL.String())
+	}
+
 	resp, err := t.upstream.RoundTrip(r)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create new roundtrip from given transport")
