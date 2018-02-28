@@ -23,7 +23,7 @@ import (
 
 func ExampleClient_Run() {
 	// Prepare a SignalR client.
-	c := signalr.New("fake-server.definitely-not-real", "123", "my-endpoint", "special connection data")
+	c := signalr.New("fake-server.definitely-not-real", "123", "my-endpoint", "special connection data", nil)
 
 	// Start the connection.
 	msgs, errs, err := c.Run()
@@ -54,7 +54,7 @@ func Example_basic() {
 	connectionData := `{"custom":"data"}`
 
 	// Prepare a SignalR client.
-	c := signalr.New(host, protocol, endpoint, connectionData)
+	c := signalr.New(host, protocol, endpoint, connectionData, nil)
 
 	// Start the connection.
 	msgs, errs, err := c.Run()
@@ -81,9 +81,10 @@ func Example_complex() {
 	protocol := "some-protocol-version-123"
 	endpoint := "/usually/something/like/this"
 	connectionData := `{"custom":"data"}`
+	params := map[string]string{"custom-key": "custom-value"}
 
 	// Prepare a SignalR client.
-	c := signalr.New(host, protocol, endpoint, connectionData)
+	c := signalr.New(host, protocol, endpoint, connectionData, params)
 
 	// Perform any optional modifications to the client here. Read the docs for
 	// all the available options that are exposed via public fields.
@@ -211,9 +212,9 @@ func newTestServer(fn http.HandlerFunc, useTLS bool) *httptest.Server {
 	return ts
 }
 
-func newTestClient(protocol, endpoint, connectionData string, ts *httptest.Server) *signalr.Client {
+func newTestClient(protocol, endpoint, connectionData string, params map[string]string, ts *httptest.Server) *signalr.Client {
 	// Prepare a SignalR client.
-	c := signalr.New(hostFromServerURL(ts.URL), protocol, endpoint, connectionData)
+	c := signalr.New(hostFromServerURL(ts.URL), protocol, endpoint, connectionData, params)
 	c.HTTPClient = ts.Client()
 
 	// Save the TLS config in case this is using TLS.
@@ -255,6 +256,7 @@ func TestClient_Negotiate(t *testing.T) {
 	// requests are sent that should have different responses based on which
 	// request is being sent.
 	var requestID int
+	log.Println(requestID)
 
 	cases := map[string]struct {
 		fn       http.HandlerFunc
@@ -262,6 +264,7 @@ func TestClient_Negotiate(t *testing.T) {
 		TLS      bool
 		exp      *signalr.Client
 		scheme   signalr.Scheme
+		params   map[string]string
 		useDebug bool
 		wantErr  string
 	}{
@@ -359,6 +362,23 @@ func TestClient_Negotiate(t *testing.T) {
 				ConnectionData:  "",
 			},
 		},
+		"custom parameters": {
+			fn: signalr.TestNegotiate,
+			in: &signalr.Client{
+				Protocol:       "1337",
+				Endpoint:       "/signalr",
+				ConnectionData: "all the data",
+			},
+			TLS:    false,
+			params: map[string]string{"custom-key": "custom-value"},
+			exp: &signalr.Client{
+				Protocol:        "1337",
+				Endpoint:        "/signalr",
+				ConnectionToken: "hello world",
+				ConnectionID:    "1234-ABC",
+				ConnectionData:  "",
+			},
+		},
 	}
 
 	for id, tc := range cases {
@@ -370,11 +390,19 @@ func TestClient_Negotiate(t *testing.T) {
 		// Reset the request ID.
 		requestID = 0
 
+		// Prepare to save parameters.
+		var params map[string]string
+		done := make(chan struct{})
+
 		// Create a test server.
-		ts := newTestServer(http.HandlerFunc(tc.fn), tc.TLS)
+		ts := newTestServer(func(w http.ResponseWriter, r *http.Request) {
+			params = extractCustomParams(r.URL.Query())
+			tc.fn(w, r)
+			go func() { done <- struct{}{} }()
+		}, tc.TLS)
 
 		// Create a test client.
-		c := newTestClient(tc.in.Protocol, tc.in.Endpoint, tc.in.ConnectionData, ts)
+		c := newTestClient(tc.in.Protocol, tc.in.Endpoint, tc.in.ConnectionData, tc.params, ts)
 
 		// Set the wait time to milliseconds.
 		c.RetryWaitDuration = 1 * time.Millisecond
@@ -386,6 +414,12 @@ func TestClient_Negotiate(t *testing.T) {
 
 		// Perform the negotiation.
 		err := c.Negotiate()
+
+		// If the scheme is invalid, this will never send a request, so we move
+		// on. Otherwise, we wait for the request to complete.
+		if tc.scheme != ":" {
+			<-done
+		}
 
 		// Make sure the error matches the expected error.
 		if tc.wantErr != "" {
@@ -399,6 +433,7 @@ func TestClient_Negotiate(t *testing.T) {
 		equals(t, id, tc.exp.ConnectionID, c.ConnectionID)
 		equals(t, id, tc.exp.Protocol, c.Protocol)
 		equals(t, id, tc.exp.Endpoint, c.Endpoint)
+		equals(t, id, tc.params, params)
 
 		ts.Close()
 
@@ -409,6 +444,27 @@ func TestClient_Negotiate(t *testing.T) {
 	}
 }
 
+func extractCustomParams(values url.Values) map[string]string {
+	// Remove the parameters that we know will be there.
+	values.Del("transport")
+	values.Del("clientProtocol")
+	values.Del("connectionData")
+
+	// Return nil if nothing remains.
+	if len(values) == 0 {
+		return nil
+	}
+
+	// Save the custom parameters.
+	params := make(map[string]string)
+	for k, v := range values {
+		params[k] = v[0]
+	}
+
+	// Return the custom parameters.
+	return params
+}
+
 func TestClient_Connect(t *testing.T) {
 	t.Parallel()
 
@@ -416,6 +472,7 @@ func TestClient_Connect(t *testing.T) {
 		fn      http.HandlerFunc
 		TLS     bool
 		cookies []*http.Cookie
+		params  map[string]string
 		wantErr string
 	}{
 		"successful https connect": {
@@ -444,23 +501,30 @@ func TestClient_Connect(t *testing.T) {
 				Value: "world",
 			}},
 		},
+		"custom parameters": {
+			fn:     signalr.TestConnect,
+			TLS:    true,
+			params: map[string]string{"custom-key": "custom-value"},
+		},
 	}
 
 	for id, tc := range cases {
 		// Make a cookie recording wrapper function.
 		done := make(chan struct{})
 		var cookies []*http.Cookie
-		recordCookies := func(w http.ResponseWriter, r *http.Request) {
+		var params map[string]string
+		recordResponse := func(w http.ResponseWriter, r *http.Request) {
 			cookies = r.Cookies()
+			params = extractCustomParams(r.URL.Query())
 			tc.fn(w, r)
 			go func() { done <- struct{}{} }()
 		}
 
 		// Set up the test server.
-		ts := newTestServer(recordCookies, tc.TLS)
+		ts := newTestServer(recordResponse, tc.TLS)
 
 		// Prepare a new client.
-		c := newTestClient("", "", "", ts)
+		c := newTestClient("", "", "", tc.params, ts)
 
 		// Set cookies if they have been configured.
 		if tc.cookies != nil {
@@ -488,6 +552,7 @@ func TestClient_Connect(t *testing.T) {
 			if len(tc.cookies) > 0 {
 				equals(t, id, tc.cookies, cookies)
 			}
+			equals(t, id, tc.params, params)
 			ok(t, id, err)
 		}
 
@@ -506,6 +571,7 @@ func TestClient_Start(t *testing.T) {
 		startFn     http.HandlerFunc
 		connectFn   http.HandlerFunc
 		scheme      signalr.Scheme
+		params      map[string]string
 		wantErr     string
 	}{
 		"successful start": {
@@ -583,13 +649,21 @@ func TestClient_Start(t *testing.T) {
 			connectFn:   signalr.TestConnect,
 			wantErr:     "response is nil",
 		},
+		"custom parameters": {
+			startFn:   signalr.TestStart,
+			connectFn: signalr.TestConnect,
+			params:    map[string]string{"custom-key": "custom-value"},
+		},
 	}
 
 	for id, tc := range cases {
+		var params map[string]string
+
 		// Create a test server that is initialized with this test
 		// case's "start handler".
 		ts := newTestServer(func(w http.ResponseWriter, r *http.Request) {
 			if strings.Contains(r.URL.Path, "/start") {
+				params = extractCustomParams(r.URL.Query())
 				tc.startFn(w, r)
 			} else if strings.Contains(r.URL.Path, "/connect") {
 				tc.connectFn(w, r)
@@ -597,7 +671,7 @@ func TestClient_Start(t *testing.T) {
 		}, true)
 
 		// Create a test client and establish the initial connection.
-		c := newTestClient("", "", "", ts)
+		c := newTestClient("", "", "", tc.params, ts)
 
 		// Set the wait time to milliseconds.
 		c.RetryWaitDuration = 1 * time.Millisecond
@@ -635,6 +709,8 @@ func TestClient_Start(t *testing.T) {
 			// Verify no error occurred.
 			ok(t, id, err)
 
+			// Verify parameters were properly set.
+			equals(t, id, tc.params, params)
 		}
 
 		ts.Close()
@@ -688,7 +764,7 @@ func TestClient_Init(t *testing.T) {
 			}
 		}), true)
 
-		c := newTestClient("1.5", "/signalr", "all the data", ts)
+		c := newTestClient("1.5", "/signalr", "all the data", nil, ts)
 		c.RetryWaitDuration = 1 * time.Millisecond
 
 		// Run the client.
@@ -748,7 +824,7 @@ func TestClient_Send(t *testing.T) {
 
 	for id, tc := range cases {
 		// Set up a new test client.
-		c := signalr.New("", "", "", "")
+		c := signalr.New("", "", "", "", nil)
 
 		// Set up a fake connection, if one has been created.
 		if tc.conn != nil {
@@ -778,9 +854,12 @@ func TestNew(t *testing.T) {
 	protocol := "test-protocol"
 	endpoint := "test-endpoint"
 	connectionData := "test-connection-data"
+	params := map[string]string{
+		"test-key": "test-value",
+	}
 
 	// Create the client.
-	c := signalr.New(host, protocol, endpoint, connectionData)
+	c := signalr.New(host, protocol, endpoint, connectionData, params)
 
 	// Validate values were set up properly.
 	equals(t, "host", host, c.Host)

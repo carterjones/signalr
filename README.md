@@ -30,7 +30,7 @@ func main() {
 	connectionData := `{"custom":"data"}`
 
 	// Prepare a SignalR client.
-	c := signalr.New(host, protocol, endpoint, connectionData)
+	c := signalr.New(host, protocol, endpoint, connectionData, nil)
 
 	// Start the connection.
 	msgs, errs, err := c.Run()
@@ -68,9 +68,10 @@ func main() {
 	protocol := "some-protocol-version-123"
 	endpoint := "/usually/something/like/this"
 	connectionData := `{"custom":"data"}`
+	params := map[string]string{"custom-key": "custom-value"}
 
 	// Prepare a SignalR client.
-	c := signalr.New(host, protocol, endpoint, connectionData)
+	c := signalr.New(host, protocol, endpoint, connectionData, params)
 
 	// Perform any optional modifications to the client here. Read the docs for
 	// all the available options that are exposed via public fields.

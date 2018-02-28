@@ -107,7 +107,11 @@ type Client struct {
 	// The websockets protocol version.
 	Protocol string
 
+	// Connection data passed to the service's websocket.
 	ConnectionData string
+
+	// User-defined custom parameters passed with each request to the server.
+	Params map[string]string
 
 	// The HTTPClient used to initialize the websocket connection.
 	HTTPClient *http.Client
@@ -205,6 +209,11 @@ func makeURL(command string, c *Client) url.URL {
 	// Add shared parameters.
 	params.Set("connectionData", c.ConnectionData)
 	params.Set("clientProtocol", c.Protocol)
+
+	// Add custom user-supplied parameters.
+	for k, v := range c.Params {
+		params.Set(k, v)
+	}
 
 	// Set the connectionToken.
 	if c.ConnectionToken != "" {
@@ -860,7 +869,7 @@ func (c *Client) Close() {
 }
 
 // New creates and initializes a SignalR client.
-func New(host, protocol, endpoint, connectionData string) *Client {
+func New(host, protocol, endpoint, connectionData string, params map[string]string) *Client {
 	// Create an HTTP client that supports CloudFlare-protected sites by
 	// default.
 	cfTransport := scraper.NewTransport(http.DefaultTransport)
@@ -877,6 +886,7 @@ func New(host, protocol, endpoint, connectionData string) *Client {
 		close:               make(chan struct{}),
 		HTTPClient:          httpClient,
 		Headers:             make(map[string]string),
+		Params:              params,
 		Scheme:              HTTPS,
 		MaxNegotiateRetries: 5,
 		MaxConnectRetries:   5,

@@ -100,9 +100,9 @@ func newTestServer(fn http.HandlerFunc, tls bool) *httptest.Server {
 	return ts
 }
 
-func newTestClient(protocol, endpoint, connectionData string, ts *httptest.Server) *Client {
+func newTestClient(protocol, endpoint, connectionData string, params map[string]string, ts *httptest.Server) *Client {
 	// Prepare a SignalR client.
-	c := New(hostFromServerURL(ts.URL), protocol, endpoint, connectionData)
+	c := New(hostFromServerURL(ts.URL), protocol, endpoint, connectionData, params)
 	c.HTTPClient = ts.Client()
 
 	// Save the TLS config in case this is using TLS.
@@ -373,7 +373,7 @@ func TestClient_readMessages(t *testing.T) { // nolint: gocyclo
 		defer ts.Close()
 
 		// Make a new client.
-		c := newTestClient("1.5", "/signalr", "all the data", ts)
+		c := newTestClient("1.5", "/signalr", "all the data", nil, ts)
 		c.RetryWaitDuration = 1 * time.Millisecond
 
 		// Perform the first part of the initialization routine.
@@ -829,7 +829,7 @@ func TestProcessStartResponse(t *testing.T) {
 
 	for id, tc := range cases {
 		// Make a new client.
-		c := New("", "", "", "")
+		c := New("", "", "", "", nil)
 
 		err := c.processStartResponse(tc.body, tc.conn)
 
@@ -890,7 +890,7 @@ func TestProcessNegotiateResponse(t *testing.T) {
 
 	for id, tc := range cases {
 		// Create a test client.
-		c := New("", "", "", "")
+		c := New("", "", "", "", nil)
 
 		// Get the result.
 		err := c.processNegotiateResponse(tc.body)
@@ -923,7 +923,7 @@ func TestClient_attemptReconnect(t *testing.T) {
 
 	for _, tc := range cases {
 		// Create a test client.
-		c := New("", "", "", "")
+		c := New("", "", "", "", nil)
 
 		// Set the maximum number of retries.
 		c.MaxReconnectRetries = tc.maxRetries
