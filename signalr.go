@@ -151,6 +151,9 @@ type Client struct {
 	// phase and then ignored by all subsequent steps.
 	ConnectionID string
 
+	// The groups token that is used during reconnect attempts.
+	GroupsToken string
+
 	// Header values that should be applied to all HTTP requests.
 	Headers map[string]string
 
@@ -238,6 +241,9 @@ func makeURL(command string, c *Client) url.URL {
 		u.Path += "/connect"
 	case "reconnect":
 		connectAdjustments()
+		if c.GroupsToken != "" {
+			params.Set("groupsToken", c.GroupsToken)
+		}
 		u.Path += "/reconnect"
 	case "start":
 		u.Scheme = string(c.Scheme)
@@ -561,6 +567,10 @@ func (c *Client) processStartResponse(body io.ReadCloser, conn WebsocketConn) (e
 	serverInitialized := 1
 	if pcm.S != serverInitialized {
 		return errors.Errorf("unexpected S value received from server: %d | message: %s", pcm.S, string(p))
+	}
+
+	if pcm.G != "" {
+		c.GroupsToken = pcm.G
 	}
 
 	// Since we got to this point, the connection is successful. So we set

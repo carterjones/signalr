@@ -577,6 +577,88 @@ func TestClient_Connect(t *testing.T) {
 	}
 }
 
+func TestClient_Reconnect(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string]struct {
+		fn          http.HandlerFunc
+		groupsToken string
+		wantErr     string
+	}{
+		"successful reconnect": {
+			fn: signalr.TestReconnect,
+		},
+		"groups token": {
+			fn:          signalr.TestReconnect,
+			groupsToken: "my-custom-token",
+		},
+	}
+
+	for id, tc := range cases {
+		// Make a cookie recording wrapper function.
+		done := make(chan struct{})
+		var groupsToken string
+		recordResponse := func(w http.ResponseWriter, r *http.Request) {
+			groupsToken = r.URL.Query().Get("groupsToken")
+			tc.fn(w, r)
+			go func() { done <- struct{}{} }()
+		}
+
+		// Set up the test server.
+		ts := newTestServer(recordResponse, true)
+
+		// Prepare a new client.
+		c := newTestClient("", "", "", nil, ts)
+
+		// Set the wait time to milliseconds.
+		c.RetryWaitDuration = 1 * time.Millisecond
+
+		// Set the group token.
+		c.GroupsToken = tc.groupsToken
+
+		// Perform the connection.
+		conn, err := c.Reconnect()
+		<-done
+
+		if tc.wantErr != "" {
+			errMatches(t, id, err, tc.wantErr)
+		} else {
+			ok(t, id, err)
+			equals(t, id, tc.groupsToken, groupsToken)
+		}
+
+		notNil(t, id, conn)
+
+		ts.Close()
+	}
+}
+
+func sampleGroupsTokenConnect(w http.ResponseWriter, r *http.Request) {
+	upgrader := websocket.Upgrader{}
+	c, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Panic(err)
+	}
+
+	go func() {
+		for {
+			_, _, rerr := c.ReadMessage()
+			if rerr != nil {
+				return
+			}
+		}
+	}()
+
+	go func() {
+		for {
+			werr := c.WriteMessage(websocket.TextMessage, []byte(`{"S":1,"G":"my-custom-groups-token"}`))
+			if werr != nil {
+				return
+			}
+		}
+	}()
+}
+
 func TestClient_Start(t *testing.T) {
 	t.Parallel()
 
@@ -587,6 +669,7 @@ func TestClient_Start(t *testing.T) {
 		connectFn   http.HandlerFunc
 		scheme      signalr.Scheme
 		params      map[string]string
+		groupsToken string
 		wantErr     string
 	}{
 		"successful start": {
@@ -669,6 +752,11 @@ func TestClient_Start(t *testing.T) {
 			connectFn: signalr.TestConnect,
 			params:    map[string]string{"custom-key": "custom-value"},
 		},
+		"groups token": {
+			startFn:     signalr.TestStart,
+			groupsToken: "my-custom-groups-token",
+			connectFn:   sampleGroupsTokenConnect,
+		},
 	}
 
 	for id, tc := range cases {
@@ -726,6 +814,9 @@ func TestClient_Start(t *testing.T) {
 
 			// Verify parameters were properly set.
 			equals(t, id, tc.params, params)
+
+			// Verify the groups token was properly set.
+			equals(t, id, tc.groupsToken, c.GroupsToken)
 		}
 
 		ts.Close()
