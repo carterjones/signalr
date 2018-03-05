@@ -3,9 +3,12 @@ package signalr
 import (
 	"crypto/tls"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
+	"math"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"os"
@@ -220,17 +223,21 @@ func makeURL(command string, c *Client) url.URL {
 		params.Set("connectionToken", c.ConnectionToken)
 	}
 
+	connectAdjustments := func() {
+		setWebsocketURLScheme(&u, c.Scheme)
+		params.Set("transport", "webSockets")
+		params.Set("tid", fmt.Sprintf("%.0f", math.Floor(rand.Float64()*11)))
+	}
+
 	switch command {
 	case "negotiate":
 		u.Scheme = string(c.Scheme)
 		u.Path += "/negotiate"
 	case "connect":
-		setWebsocketURLScheme(&u, c.Scheme)
-		params.Set("transport", "webSockets")
+		connectAdjustments()
 		u.Path += "/connect"
 	case "reconnect":
-		setWebsocketURLScheme(&u, c.Scheme)
-		params.Set("transport", "webSockets")
+		connectAdjustments()
 		u.Path += "/reconnect"
 	case "start":
 		u.Scheme = string(c.Scheme)

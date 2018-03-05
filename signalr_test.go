@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -147,6 +148,14 @@ func notNil(tb testing.TB, id string, act interface{}) {
 	if act == nil {
 		_, file, line, _ := runtime.Caller(1)
 		tb.Errorf(red("%s:%d (%s):\n\texp: a non-nil value\n\tgot: %#v\n"),
+			filepath.Base(file), line, id, act)
+	}
+}
+
+func notEmpty(tb testing.TB, id string, act string) {
+	if act == "" {
+		_, file, line, _ := runtime.Caller(1)
+		tb.Errorf(red("%s:%d (%s):\n\texp: a non-empty value\n\tgot: %#v\n"),
 			filepath.Base(file), line, id, act)
 	}
 }
@@ -449,6 +458,7 @@ func extractCustomParams(values url.Values) map[string]string {
 	values.Del("transport")
 	values.Del("clientProtocol")
 	values.Del("connectionData")
+	values.Del("tid")
 
 	// Return nil if nothing remains.
 	if len(values) == 0 {
@@ -513,9 +523,11 @@ func TestClient_Connect(t *testing.T) {
 		done := make(chan struct{})
 		var cookies []*http.Cookie
 		var params map[string]string
+		var tid string
 		recordResponse := func(w http.ResponseWriter, r *http.Request) {
 			cookies = r.Cookies()
 			params = extractCustomParams(r.URL.Query())
+			tid = r.URL.Query().Get("tid")
 			tc.fn(w, r)
 			go func() { done <- struct{}{} }()
 		}
@@ -554,6 +566,9 @@ func TestClient_Connect(t *testing.T) {
 			}
 			equals(t, id, tc.params, params)
 			ok(t, id, err)
+			notEmpty(t, id, tid)
+			_, cerr := strconv.Atoi(tid)
+			ok(t, id, cerr)
 		}
 
 		notNil(t, id, conn)
