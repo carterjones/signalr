@@ -583,6 +583,7 @@ func TestClient_Reconnect(t *testing.T) {
 	cases := map[string]struct {
 		fn          http.HandlerFunc
 		groupsToken string
+		messageID   string
 		wantErr     string
 	}{
 		"successful reconnect": {
@@ -592,14 +593,20 @@ func TestClient_Reconnect(t *testing.T) {
 			fn:          signalr.TestReconnect,
 			groupsToken: "my-custom-token",
 		},
+		"message id": {
+			fn:        signalr.TestReconnect,
+			messageID: "unique-message-id",
+		},
 	}
 
 	for id, tc := range cases {
 		// Make a cookie recording wrapper function.
 		done := make(chan struct{})
 		var groupsToken string
+		var messageID string
 		recordResponse := func(w http.ResponseWriter, r *http.Request) {
 			groupsToken = r.URL.Query().Get("groupsToken")
+			messageID = r.URL.Query().Get("messageId")
 			tc.fn(w, r)
 			go func() { done <- struct{}{} }()
 		}
@@ -615,6 +622,7 @@ func TestClient_Reconnect(t *testing.T) {
 
 		// Set the group token.
 		c.GroupsToken.Set(tc.groupsToken)
+		c.MessageID.Set(tc.messageID)
 
 		// Perform the connection.
 		conn, err := c.Reconnect()
@@ -625,6 +633,7 @@ func TestClient_Reconnect(t *testing.T) {
 		} else {
 			ok(t, id, err)
 			equals(t, id, tc.groupsToken, groupsToken)
+			equals(t, id, tc.messageID, messageID)
 		}
 
 		notNil(t, id, conn)
@@ -633,7 +642,7 @@ func TestClient_Reconnect(t *testing.T) {
 	}
 }
 
-func sampleGroupsTokenConnect(w http.ResponseWriter, r *http.Request) {
+func handleWebsocketWithCustomMsg(w http.ResponseWriter, r *http.Request, msg string) {
 	upgrader := websocket.Upgrader{}
 	c, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -651,7 +660,7 @@ func sampleGroupsTokenConnect(w http.ResponseWriter, r *http.Request) {
 
 	go func() {
 		for {
-			werr := c.WriteMessage(websocket.TextMessage, []byte(`{"S":1,"G":"my-custom-groups-token"}`))
+			werr := c.WriteMessage(websocket.TextMessage, []byte(msg))
 			if werr != nil {
 				return
 			}
@@ -670,6 +679,7 @@ func TestClient_Start(t *testing.T) {
 		scheme      signalr.Scheme
 		params      map[string]string
 		groupsToken string
+		messageID   string
 		wantErr     string
 	}{
 		"successful start": {
@@ -755,7 +765,16 @@ func TestClient_Start(t *testing.T) {
 		"groups token": {
 			startFn:     signalr.TestStart,
 			groupsToken: "my-custom-groups-token",
-			connectFn:   sampleGroupsTokenConnect,
+			connectFn: func(w http.ResponseWriter, r *http.Request) {
+				handleWebsocketWithCustomMsg(w, r, `{"S":1,"G":"my-custom-groups-token"}`)
+			},
+		},
+		"message id": {
+			startFn:   signalr.TestStart,
+			messageID: "my-custom-message-id",
+			connectFn: func(w http.ResponseWriter, r *http.Request) {
+				handleWebsocketWithCustomMsg(w, r, `{"S":1,"C":"my-custom-message-id"}`)
+			},
 		},
 	}
 
@@ -817,6 +836,9 @@ func TestClient_Start(t *testing.T) {
 
 			// Verify the groups token was properly set.
 			equals(t, id, tc.groupsToken, c.GroupsToken.Get())
+
+			// Verify the message ID was properly set.
+			equals(t, id, tc.messageID, c.MessageID.Get())
 		}
 
 		ts.Close()

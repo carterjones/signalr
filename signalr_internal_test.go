@@ -601,13 +601,16 @@ func TestProcessReadMessagesMessage(t *testing.T) {
 		msgs := make(chan Message)
 		errs := make(chan error)
 
+		c := new(Client)
+
 		// Process the message.
-		go processReadMessagesMessage(tc.p, msgs, errs)
+		go c.processReadMessagesMessage(tc.p, msgs, errs)
 
 		// Evaluate the results.
 		select {
 		case msg := <-msgs:
 			equals(t, id, *tc.expMsg, msg)
+			equals(t, id, tc.expMsg.C, c.MessageID.Get())
 		case err := <-errs:
 			testErrMatches(t, id, err, tc.wantErr)
 		case <-time.After(500 * time.Millisecond):

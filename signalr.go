@@ -174,6 +174,11 @@ type Client struct {
 	// yUcSohHrAZGEwK62B4Ao0WYac82p5yeRvHHInBgVmSK7jX++ym3kIgDy466yW/gRPp2l3Py8G45mRLJ9FslB3sKfsDPUNWL1b54cvjaSXCUo0znzyACxrN2Y0kNLR59h7hb6PgOSfy3Z2R5CUSVm5LZg6jg=
 	GroupsToken safeString
 
+	// The message ID that is used during reconnect attempts.
+	//
+	// This is an example message ID: d-8B839DC3-C,0|aaZe,0|aaZf,2|C1,2A801
+	MessageID safeString
+
 	// Header values that should be applied to all HTTP requests.
 	Headers map[string]string
 
@@ -263,6 +268,9 @@ func makeURL(command string, c *Client) url.URL {
 		connectAdjustments()
 		if c.GroupsToken.Get() != "" {
 			params.Set("groupsToken", c.GroupsToken.Get())
+		}
+		if c.MessageID.Get() != "" {
+			params.Set("messageId", c.MessageID.Get())
 		}
 		u.Path += "/reconnect"
 	case "start":
@@ -593,6 +601,10 @@ func (c *Client) processStartResponse(body io.ReadCloser, conn WebsocketConn) (e
 		c.GroupsToken.Set(pcm.G)
 	}
 
+	if pcm.C != "" {
+		c.MessageID.Set(pcm.C)
+	}
+
 	// Since we got to this point, the connection is successful. So we set
 	// the connection for the client.
 	c.conn = conn
@@ -802,7 +814,7 @@ func (c *Client) processReadMessagesError(err error, msgCh chan Message, errCh c
 	return ok
 }
 
-func processReadMessagesMessage(p []byte, msgs chan Message, errs chan error) {
+func (c *Client) processReadMessagesMessage(p []byte, msgs chan Message, errs chan error) {
 	// Ignore KeepAlive messages.
 	if len(p) == 2 && p[0] == '{' && p[1] == '}' {
 		return
@@ -814,6 +826,9 @@ func processReadMessagesMessage(p []byte, msgs chan Message, errs chan error) {
 		errs <- errors.Wrap(err, "json unmarshal failed")
 		return
 	}
+
+	// Update the current message ID.
+	c.MessageID.Set(msg.C)
 
 	msgs <- msg
 }
@@ -856,7 +871,7 @@ func (c *Client) readMessage(msgCh chan Message, errCh chan error) bool {
 	case err := <-errs:
 		ok = c.processReadMessagesError(err, msgCh, errCh)
 	case p := <-pCh:
-		processReadMessagesMessage(p, msgCh, errCh)
+		c.processReadMessagesMessage(p, msgCh, errCh)
 	case <-c.close:
 		ok = false
 	}
