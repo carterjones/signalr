@@ -79,6 +79,23 @@ type Message struct {
 	T json.RawMessage
 }
 
+type safeString struct {
+	data string
+	mux  sync.Mutex
+}
+
+func (s *safeString) Set(str string) {
+	s.mux.Lock()
+	s.data = str
+	s.mux.Unlock()
+}
+
+func (s *safeString) Get() string {
+	s.mux.Lock()
+	defer s.mux.Unlock()
+	return s.data
+}
+
 // Scheme represents a type of transport scheme. For the purposes of this
 // project, we only provide constants for schemes relevant to HTTP and
 // websockets.
@@ -152,7 +169,10 @@ type Client struct {
 	ConnectionID string
 
 	// The groups token that is used during reconnect attempts.
-	GroupsToken string
+	//
+	// This is an example groups token:
+	// yUcSohHrAZGEwK62B4Ao0WYac82p5yeRvHHInBgVmSK7jX++ym3kIgDy466yW/gRPp2l3Py8G45mRLJ9FslB3sKfsDPUNWL1b54cvjaSXCUo0znzyACxrN2Y0kNLR59h7hb6PgOSfy3Z2R5CUSVm5LZg6jg=
+	GroupsToken safeString
 
 	// Header values that should be applied to all HTTP requests.
 	Headers map[string]string
@@ -241,8 +261,8 @@ func makeURL(command string, c *Client) url.URL {
 		u.Path += "/connect"
 	case "reconnect":
 		connectAdjustments()
-		if c.GroupsToken != "" {
-			params.Set("groupsToken", c.GroupsToken)
+		if c.GroupsToken.Get() != "" {
+			params.Set("groupsToken", c.GroupsToken.Get())
 		}
 		u.Path += "/reconnect"
 	case "start":
@@ -570,7 +590,7 @@ func (c *Client) processStartResponse(body io.ReadCloser, conn WebsocketConn) (e
 	}
 
 	if pcm.G != "" {
-		c.GroupsToken = pcm.G
+		c.GroupsToken.Set(pcm.G)
 	}
 
 	// Since we got to this point, the connection is successful. So we set

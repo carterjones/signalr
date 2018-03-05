@@ -614,7 +614,7 @@ func TestClient_Reconnect(t *testing.T) {
 		c.RetryWaitDuration = 1 * time.Millisecond
 
 		// Set the group token.
-		c.GroupsToken = tc.groupsToken
+		c.GroupsToken.Set(tc.groupsToken)
 
 		// Perform the connection.
 		conn, err := c.Reconnect()
@@ -816,7 +816,7 @@ func TestClient_Start(t *testing.T) {
 			equals(t, id, tc.params, params)
 
 			// Verify the groups token was properly set.
-			equals(t, id, tc.groupsToken, c.GroupsToken)
+			equals(t, id, tc.groupsToken, c.GroupsToken.Get())
 		}
 
 		ts.Close()
