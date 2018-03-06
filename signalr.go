@@ -576,8 +576,15 @@ func (c *Client) processReadMessagesMessage(p []byte, msgs chan Message, errs ch
 		return
 	}
 
+	// Update the groups token.
+	if msg.G != "" {
+		c.GroupsToken.Set(msg.G)
+	}
+
 	// Update the current message ID.
-	c.MessageID.Set(msg.C)
+	if msg.C != "" {
+		c.MessageID.Set(msg.C)
+	}
 
 	msgs <- msg
 }

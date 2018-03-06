@@ -594,6 +594,11 @@ func TestProcessReadMessagesMessage(t *testing.T) {
 			expMsg:  &Message{C: "test message"},
 			wantErr: "",
 		},
+		"groups token": {
+			p:       []byte(`{"C":"test message","G":"custom-groups-token"}`),
+			expMsg:  &Message{C: "test message", G: "custom-groups-token"},
+			wantErr: "",
+		},
 	}
 
 	for id, tc := range cases {
