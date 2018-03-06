@@ -73,7 +73,7 @@ func TestTestCompleteHandler(t *testing.T) {
 			},
 			customOrigin:    "blabla",
 			isWebsocketCall: true,
-			wantErr:         "websocket: request origin not allowed by Upgrader.CheckOrigin",
+			wantErr:         "websocket: 'Origin' header value not allowed",
 		},
 		"reconnect": {
 			path: "/reconnect",
