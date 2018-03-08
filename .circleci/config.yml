@@ -22,5 +22,6 @@ jobs:
           name: Generate code coverage statistics
           command: |
             make cover
+            cp c.out coverage.txt
             ./cc-test-reporter after-build -t gocov --exit-code $?
             bash <(curl -s https://codecov.io/bash)
