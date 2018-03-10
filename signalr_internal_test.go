@@ -428,9 +428,13 @@ func TestClient_readMessages(t *testing.T) { // nolint: gocyclo
 		errs := make(chan error)
 
 		go func(id string) {
+			// Define handlers.
+			msgHandler := func(msg Message) { msgs <- msg }
+			errHandler := func(err error) { errs <- err }
+
 			// Process all messages. This will finish when the
 			// connection is closed.
-			c.ReadMessages(msgs, errs)
+			c.ReadMessages(msgHandler, errHandler)
 			logEvent("reader", id, "finished reading messages")
 
 			// At this point, the connection has been closed and the
@@ -606,10 +610,14 @@ func TestProcessReadMessagesMessage(t *testing.T) {
 		msgs := make(chan Message)
 		errs := make(chan error)
 
+		// Define handlers.
+		msgHandler := func(msg Message) { msgs <- msg }
+		errHandler := func(err error) { errs <- err }
+
 		c := new(Client)
 
 		// Process the message.
-		go c.processReadMessagesMessage(tc.p, msgs, errs)
+		go c.processReadMessagesMessage(tc.p, msgHandler, errHandler)
 
 		// Evaluate the results.
 		select {
@@ -937,11 +945,7 @@ func TestClient_attemptReconnect(t *testing.T) {
 		c.MaxReconnectRetries = tc.maxRetries
 		c.RetryWaitDuration = 1 * time.Millisecond
 
-		// Prepare message and error channels.
-		msgs := make(chan Message)
-		errs := make(chan error)
-
 		// Attempt to reconnect.
-		c.attemptReconnect(msgs, errs)
+		c.attemptReconnect()
 	}
 }

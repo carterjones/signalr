@@ -455,12 +455,8 @@ func (c *Client) processStartResponse(body io.ReadCloser, conn WebsocketConn) (e
 }
 
 // Run connects to the host and performs the websocket initialization routines
-// that are part of the SignalR specification. It returns channels that:
-//  - receive messages from the websocket connection
-//  - receive errors encountered while processing the weblocket connection
-func (c *Client) Run() (chan Message, chan error, error) {
-	errCh := make(chan error)
-	msgCh := make(chan Message)
+// that are part of the SignalR specification.
+func (c *Client) Run(msgHandler MsgHandler, errHandler ErrHandler) error {
 	var err error
 
 	// Make a channel that is used to indicate that the connection
@@ -494,27 +490,26 @@ func (c *Client) Run() (chan Message, chan error, error) {
 		}
 
 		// Start the read message loop.
-		go c.ReadMessages(msgCh, errCh)
+		go c.ReadMessages(msgHandler, errHandler)
 	}()
 
 	// Wait for initialization goroutine to complete.
 	<-done
 
-	return msgCh, errCh, err
+	return err
 }
 
 // ReadMessages processes WebSocket messages from the underlying websocket
-// connection. When a message is processed, it is passed along the msgCh
-// channel. When an error ocurrs, it is sent along the errCh channel.
-func (c *Client) ReadMessages(msgCh chan Message, errCh chan error) {
+// connection.
+func (c *Client) ReadMessages(msgHandler MsgHandler, errHandler ErrHandler) {
 	for {
-		if !c.readMessage(msgCh, errCh) {
+		if !c.readMessage(msgHandler, errHandler) {
 			return
 		}
 	}
 }
 
-func (c *Client) readMessage(msgCh chan Message, errCh chan error) bool {
+func (c *Client) readMessage(msgHandler MsgHandler, errHandler ErrHandler) bool {
 	c.connMux.Lock()
 
 	// Set up a channel to receive signals from the Client.readMessage
@@ -550,9 +545,9 @@ func (c *Client) readMessage(msgCh chan Message, errCh chan error) bool {
 
 	select {
 	case p := <-pCh:
-		c.processReadMessagesMessage(p, msgCh, errCh)
+		c.processReadMessagesMessage(p, msgHandler, errHandler)
 	case err := <-errs:
-		ok = c.processReadMessagesError(err, msgCh, errCh)
+		ok = c.processReadMessagesError(err, errHandler)
 	case <-c.close:
 		ok = false
 	}
@@ -563,7 +558,7 @@ func (c *Client) readMessage(msgCh chan Message, errCh chan error) bool {
 	return ok
 }
 
-func (c *Client) processReadMessagesMessage(p []byte, msgs chan Message, errs chan error) {
+func (c *Client) processReadMessagesMessage(p []byte, msgHandler MsgHandler, errHandler ErrHandler) {
 	// Ignore KeepAlive messages.
 	if len(p) == 2 && p[0] == '{' && p[1] == '}' {
 		return
@@ -572,7 +567,7 @@ func (c *Client) processReadMessagesMessage(p []byte, msgs chan Message, errs ch
 	var msg Message
 	err := json.Unmarshal(p, &msg)
 	if err != nil {
-		errs <- errors.Wrap(err, "json unmarshal failed")
+		errHandler(errors.Wrap(err, "json unmarshal failed"))
 		return
 	}
 
@@ -586,10 +581,10 @@ func (c *Client) processReadMessagesMessage(p []byte, msgs chan Message, errs ch
 		c.MessageID.Set(msg.C)
 	}
 
-	msgs <- msg
+	msgHandler(msg)
 }
 
-func (c *Client) processReadMessagesError(err error, msgCh chan Message, errCh chan error) bool {
+func (c *Client) processReadMessagesError(err error, errHandler ErrHandler) bool {
 	var ok bool
 
 	// Handle various types of errors.
@@ -604,15 +599,15 @@ func (c *Client) processReadMessagesError(err error, msgCh chan Message, errCh c
 		fallthrough
 	case 1006:
 		// abnormal closure
-		ok = c.attemptReconnect(msgCh, errCh)
+		ok = c.attemptReconnect()
 	default:
-		errCh <- err
+		errHandler(err)
 	}
 
 	return ok
 }
 
-func (c *Client) attemptReconnect(msgCh chan Message, errCh chan error) bool {
+func (c *Client) attemptReconnect() bool {
 	// Attempt to reconnect in a retry loop.
 	reconnected := false
 	for i := 0; i < c.MaxReconnectRetries; i++ {
@@ -788,6 +783,12 @@ type Message struct {
 	D json.RawMessage
 	T json.RawMessage
 }
+
+// MsgHandler processes a Message.
+type MsgHandler func(msg Message)
+
+// ErrHandler processes an error.
+type ErrHandler func(err error)
 
 // Conditionally encrypt the traffic depending on the initial
 // connection's encryption.

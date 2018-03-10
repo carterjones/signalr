@@ -24,104 +24,94 @@ import (
 
 func ExampleClient_Run() {
 	// Prepare a SignalR client.
-	c := signalr.New("fake-server.definitely-not-real", "123", "my-endpoint", "special connection data", nil)
+	c := signalr.New(
+		"fake-server.definitely-not-real",
+		"1.5",
+		"/signalr",
+		`[{"name":"awesomehub"}]`,
+		nil,
+	)
+
+	// Define handlers.
+	msgHandler := func(msg signalr.Message) { log.Println(msg) }
+	panicIfErr := func(err error) {
+		if err != nil {
+			log.Panic(err)
+		}
+	}
 
 	// Start the connection.
-	msgs, errs, err := c.Run()
+	err := c.Run(msgHandler, panicIfErr)
 	if err != nil {
 		log.Panic(err)
 	}
 
-	// Process messages and errors.
-	for {
-		select {
-		case msg := <-msgs:
-			// Handle the message.
-			log.Println(msg)
-		case err := <-errs:
-			// Handle the error.
-			log.Panic(err)
-		case <-time.After(2 * time.Second):
-			log.Println("exiting, since we haven't sente messages")
-		}
-	}
+	// Wait indefinitely.
+	select {}
 }
 
 // This example shows the most basic way to start a websocket connection.
 func Example_basic() {
-	host := "myhost.not-real-tld"
-	protocol := "some-protocol-version-123"
-	endpoint := "/usually/something/like/this"
-	connectionData := `{"custom":"data"}`
-
 	// Prepare a SignalR client.
-	c := signalr.New(host, protocol, endpoint, connectionData, nil)
+	c := signalr.New(
+		"fake-server.definitely-not-real",
+		"1.5",
+		"/signalr",
+		`[{"name":"awesomehub"}]`,
+		nil,
+	)
 
-	// Start the connection.
-	msgs, errs, err := c.Run()
-	if err != nil {
-		log.Panic(err)
-	}
-
-	// Process messages and errors.
-	for {
-		select {
-		case msg := <-msgs:
-			// Handle the message.
-			log.Println(msg)
-		case err := <-errs:
-			// Handle the error.
+	// Define message and error handlers.
+	msgHandler := func(msg signalr.Message) { log.Println(msg) }
+	panicIfErr := func(err error) {
+		if err != nil {
 			log.Panic(err)
 		}
 	}
+
+	// Start the connection.
+	err := c.Run(msgHandler, panicIfErr)
+	panicIfErr(err)
+
+	// Wait indefinitely.
+	select {}
 }
 
 // This example shows how to manually perform each of the initialization steps.
 func Example_complex() {
-	host := "myhost.not-real-tld"
-	protocol := "some-protocol-version-123"
-	endpoint := "/usually/something/like/this"
-	connectionData := `{"custom":"data"}`
-	params := map[string]string{"custom-key": "custom-value"}
-
 	// Prepare a SignalR client.
-	c := signalr.New(host, protocol, endpoint, connectionData, params)
+	c := signalr.New(
+		"fake-server.definitely-not-real",
+		"1.5",
+		"/signalr",
+		`[{"name":"awesomehub"}]`,
+		map[string]string{"custom-key": "custom-value"},
+	)
 
 	// Perform any optional modifications to the client here. Read the docs for
 	// all the available options that are exposed via public fields.
 
-	// Manually perform the initialization routine.
-	err := c.Negotiate()
-	if err != nil {
-		log.Panic(err)
-	}
-	conn, err := c.Connect()
-	if err != nil {
-		log.Panic(err)
-	}
-	err = c.Start(conn)
-	if err != nil {
-		log.Panic(err)
-	}
-
-	// Create message and error channels.
-	msgs := make(chan signalr.Message)
-	errs := make(chan error)
-
-	// Begin the message reading loop.
-	go c.ReadMessages(msgs, errs)
-
-	// Process messages and errors.
-	for {
-		select {
-		case msg := <-msgs:
-			// Handle the message.
-			log.Println(msg)
-		case err := <-errs:
-			// Handle the error.
+	// Define message and error handlers.
+	msgHandler := func(msg signalr.Message) { log.Println(msg) }
+	panicIfErr := func(err error) {
+		if err != nil {
 			log.Panic(err)
 		}
 	}
+
+	// Manually perform the initialization routine.
+	err := c.Negotiate()
+	panicIfErr(err)
+	conn, err := c.Connect()
+	panicIfErr(err)
+	err = c.Start(conn)
+	panicIfErr(err)
+
+	// Begin the message reading loop.
+	go c.ReadMessages(msgHandler, panicIfErr)
+
+	// Wait indefinitely.
+	select {}
 }
 
 func red(s string) string {
@@ -895,8 +885,12 @@ func TestClient_Init(t *testing.T) {
 		c := newTestClient("1.5", "/signalr", "all the data", nil, ts)
 		c.RetryWaitDuration = 1 * time.Millisecond
 
+		// Define handlers.
+		msgHandler := func(signalr.Message) {}
+		errHandler := func(error) {}
+
 		// Run the client.
-		_, _, err := c.Run()
+		err := c.Run(msgHandler, errHandler)
 
 		if tc.wantErr != "" {
 			errMatches(t, id, err, tc.wantErr)

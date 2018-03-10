@@ -9,10 +9,10 @@ import (
 func main() {
 	// Prepare a SignalR client.
 	c := signalr.New(
-		"www.cryptopia.co.nz",
+		"fake-server.definitely-not-real",
 		"1.5",
 		"/signalr",
-		`[{"name":"notificationhub"}]`,
+		`[{"name":"awesomehub"}]`,
 		nil,
 	)
 
