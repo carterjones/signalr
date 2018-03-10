@@ -12,6 +12,18 @@ platforms that use SignalR.
 
 It supports CloudFlare-protected sites by default.
 
+## Examples
+
+Generic usage:
+
+- [Basic usage](https://github.com/carterjones/signalr/blob/master/examples/basic/main.go)
+- [Complex usage](https://github.com/carterjones/signalr/blob/master/examples/complex/main.go)
+
+Cryptocurrency examples:
+
+- [Bittrex](https://github.com/carterjones/signalr/blob/master/examples/bittrex/main.go)
+- [Cryptopia](https://github.com/carterjones/signalr/blob/master/examples/cryptopia/main.go)
+
 # Documentation
 
 - GoDoc: https://godoc.org/github.com/carterjones/signalr
@@ -22,5 +34,3 @@ It supports CloudFlare-protected sites by default.
 
 If anything is unclear or could be improved, please open an issue or submit a
 pull request. Thanks!
-
-# Examples
