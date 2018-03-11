@@ -655,8 +655,8 @@ func (c *Client) Send(m hubs.ClientMsg) error {
 // have completed.
 func (c *Client) SetConn(conn WebsocketConn) {
 	c.connMux.Lock()
+	defer c.connMux.Unlock()
 	c.conn = conn
-	c.connMux.Unlock()
 }
 
 // Conn returns the underlying websocket connection.
