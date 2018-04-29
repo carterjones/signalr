@@ -1,12 +1,12 @@
 repos:
 -   repo: git://github.com/pre-commit/pre-commit-hooks
-    sha: v1.2.1
+    rev: v1.2.3
     hooks:
     -   id: check-added-large-files
     -   id: check-yaml
     -   id: trailing-whitespace
 -   repo: git://github.com/carterjones/pre-commit-golang
-    sha: ac63cdce000b849f008d20ed1fc611cbccb40c5b
+    rev: ac63cdce000b849f008d20ed1fc611cbccb40c5b
     hooks:
     -   id: go-fmt
     -   id: go-vet
