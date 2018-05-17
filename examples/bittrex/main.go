@@ -7,6 +7,9 @@ import (
 	"github.com/carterjones/signalr/hubs"
 )
 
+// For more extensive use cases and capabilities, please see
+// https://github.com/carterjones/bittrex.
+
 func main() {
 	// Prepare a SignalR client.
 	c := signalr.New(
