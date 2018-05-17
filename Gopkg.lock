@@ -31,7 +31,7 @@
     "registry",
     "token"
   ]
-  revision = "6c383dd335ef8dcccef05e651ce1eccfe4d0f011"
+  revision = "03d472dc43abece8691e609a23d295ab732abba6"
 
 [[projects]]
   name = "gopkg.in/sourcemap.v1"
