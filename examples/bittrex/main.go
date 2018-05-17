@@ -13,7 +13,7 @@ func main() {
 		"socket.bittrex.com",
 		"1.5",
 		"/signalr",
-		`[{"name":"corehub"}]`,
+		`[{"name":"c2"}]`,
 		nil,
 	)
 
