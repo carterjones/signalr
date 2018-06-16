@@ -269,7 +269,7 @@ func (c *Client) Reconnect() (*websocket.Conn, error) {
 	}
 
 	// Once complete, set the new connection for this client.
-	c.conn = conn
+	c.SetConn(conn)
 
 	return conn, nil
 }
@@ -510,18 +510,6 @@ func (c *Client) ReadMessages(msgHandler MsgHandler, errHandler ErrHandler) {
 }
 
 func (c *Client) readMessage(msgHandler MsgHandler, errHandler ErrHandler) bool {
-	c.connMux.Lock()
-
-	// Set up a channel to receive signals from the Client.readMessage
-	// function as well as the goroutine that does the actual
-	// Client.conn.read. This way, the unlock operation is synchronized.
-	unlockCh := make(chan bool, 2)
-	go func() {
-		<-unlockCh
-		<-unlockCh
-		c.connMux.Unlock()
-	}()
-
 	// Set the ok flag to true to indicate that more messages can/should be
 	// read. Set the flag to false later on if this is no longer the case.
 	ok := true
@@ -532,15 +520,14 @@ func (c *Client) readMessage(msgHandler MsgHandler, errHandler ErrHandler) bool 
 
 	// Wait for a message.
 	go func() {
+		c.connMux.Lock()
 		_, p, err := c.conn.ReadMessage()
+		c.connMux.Unlock()
 		if err != nil {
 			errs <- err
 		} else {
 			pCh <- p
 		}
-
-		// Send a signal that the inner function is done processing.
-		unlockCh <- true
 	}()
 
 	select {
@@ -551,9 +538,6 @@ func (c *Client) readMessage(msgHandler MsgHandler, errHandler ErrHandler) bool 
 	case <-c.close:
 		ok = false
 	}
-
-	// Send a signal that the outer function is done processing.
-	unlockCh <- true
 
 	return ok
 }
