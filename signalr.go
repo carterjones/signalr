@@ -67,6 +67,9 @@ type Client struct {
 	// when contacting the SignalR service.
 	RetryWaitDuration time.Duration
 
+	// The maximum amount of time to spend retrying a reconnect attempt.
+	MaxReconnectAttemptDuration time.Duration
+
 	// This is the connection token set during the negotiate phase of the
 	// protocol and used to uniquely identify the connection to the server
 	// in all subsequent phases of the connection.
@@ -583,7 +586,18 @@ func (c *Client) processReadMessagesError(err error, errHandler ErrHandler) bool
 		fallthrough
 	case 1006:
 		// abnormal closure
-		ok = c.attemptReconnect()
+		okCh := make(chan bool)
+		go func() {
+			v := c.attemptReconnect()
+			okCh <- v
+		}()
+		select {
+		case ok = <-okCh:
+		case <-time.After(c.MaxReconnectAttemptDuration):
+			// Fail if the retry exceeds the maximum amount of time for
+			// reconnects to last.
+			ok = false
+		}
 	default:
 		go errHandler(err)
 	}
@@ -667,20 +681,21 @@ func New(host, protocol, endpoint, connectionData string, params map[string]stri
 	}
 
 	return &Client{
-		Host:                host,
-		Protocol:            protocol,
-		Endpoint:            endpoint,
-		ConnectionData:      connectionData,
-		close:               make(chan struct{}),
-		HTTPClient:          httpClient,
-		Headers:             make(map[string]string),
-		Params:              params,
-		Scheme:              HTTPS,
-		MaxNegotiateRetries: 5,
-		MaxConnectRetries:   5,
-		MaxReconnectRetries: 5,
-		MaxStartRetries:     5,
-		RetryWaitDuration:   1 * time.Minute,
+		Host:                        host,
+		Protocol:                    protocol,
+		Endpoint:                    endpoint,
+		ConnectionData:              connectionData,
+		close:                       make(chan struct{}),
+		HTTPClient:                  httpClient,
+		Headers:                     make(map[string]string),
+		Params:                      params,
+		Scheme:                      HTTPS,
+		MaxNegotiateRetries:         5,
+		MaxConnectRetries:           5,
+		MaxReconnectRetries:         5,
+		MaxStartRetries:             5,
+		RetryWaitDuration:           1 * time.Minute,
+		MaxReconnectAttemptDuration: 5 * time.Minute,
 	}
 }
 
