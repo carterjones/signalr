@@ -537,7 +537,16 @@ func (c *Client) readMessage(msgHandler MsgHandler, errHandler ErrHandler) bool 
 	case p := <-pCh:
 		c.processReadMessagesMessage(p, msgHandler, errHandler)
 	case err := <-errs:
-		ok = c.processReadMessagesError(err, errHandler)
+		errHandled := make(chan bool)
+		go func() {
+			v := c.processReadMessagesError(err, errHandler)
+			errHandled <- v
+		}()
+		select {
+		case ok = <-errHandled:
+		case <-c.close:
+			ok = false
+		}
 	case <-c.close:
 		ok = false
 	}
