@@ -17,3 +17,4 @@ repos:
         - --vendor
         - --cyclo-over=12
         - --enable=nakedret
+        - --fast
