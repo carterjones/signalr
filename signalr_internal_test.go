@@ -468,6 +468,93 @@ func TestClient_ReadMessages(t *testing.T) { // nolint: gocyclo
 	}
 }
 
+func TestClient_ReadMessages_earlyClose(t *testing.T) {
+	t.Parallel()
+
+	msgHandler := func(msg Message) {}
+	errHandler := func(err error) {}
+	done := make(chan struct{})
+
+	c := New("", "", "", "", map[string]string{})
+	conn := newFakeConn()
+	c.SetConn(conn)
+
+	// Launch a goroutine that starts the message reading loop. Send a done
+	// signal once the loop terminates.
+	go func() {
+		c.ReadMessages(msgHandler, errHandler)
+		done <- struct{}{}
+	}()
+
+	// Close the loop prior to sending any messages.
+	c.Close()
+
+	// Define a maximum amount of time to wait for his test to complete.
+	maxWaitTime := time.Second * 2
+	select {
+	case <-time.After(maxWaitTime):
+		t.Errorf("ReadMessages_earlyClose: timeout while waiting for message loop to close")
+	case <-done:
+		// Don't do anything; the test was a success since it received the done
+		// signal.
+	}
+}
+
+func TestClient_ReadMessages_longReconnectAttempt(t *testing.T) {
+	t.Parallel()
+
+	msgHandler := func(msg Message) {}
+	errHandler := func(err error) {}
+	done := make(chan struct{})
+
+	ts := newTestServer(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			if strings.Contains(r.URL.Path, "/negotiate") {
+				negotiate(w, r)
+			} else if strings.Contains(r.URL.Path, "/connect") {
+				connect(w, r)
+			} else if strings.Contains(r.URL.Path, "/reconnect") {
+				// Intentionally wait indefinitely on reconnect.
+				select {}
+			} else if strings.Contains(r.URL.Path, "/start") {
+				start(w, r)
+			} else {
+				log.Println("url:", r.URL)
+			}
+		}), true)
+	defer ts.Close()
+
+	c := New("", "", "", "", map[string]string{})
+	conn := newFakeConn()
+	c.SetConn(conn)
+
+	// Launch a goroutine that starts the message reading loop. Send a done
+	// signal once the loop terminates.
+	go func() {
+		c.ReadMessages(msgHandler, errHandler)
+		done <- struct{}{}
+	}()
+
+	// Define a maximum reconnect attempt time for the client.
+	c.MaxReconnectAttemptDuration = 50 * time.Millisecond
+
+	// Define a maximum amount of time to wait for his test to complete, which
+	// is much longer than the reconnect attempt.
+	maxWaitTime := time.Second * 2
+
+	// Send a test error that will eventually hang while being processed during
+	// the reconnection.
+	conn.errs <- errors.New("websocket: close 1006 (abnormal closure)")
+
+	select {
+	case <-time.After(maxWaitTime):
+		t.Errorf("ReadMessages_longReconnectAttempt: timeout while waiting for message loop to close")
+	case <-done:
+		// Don't do anything; the test was a success since it received the done
+		// signal.
+	}
+}
+
 func TestPrefixedID(t *testing.T) {
 	t.Parallel()
 
