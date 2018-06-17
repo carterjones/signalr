@@ -218,10 +218,6 @@ func logEvent(section, id, msg string) {
 	}
 }
 
-// This is the amount of time to wait before failing a test. This way, some
-// tests that rely on concurrency don't hold up the whole test suite.
-const testTimeoutDuration = 5 * time.Second
-
 func TestClient_readMessages(t *testing.T) { // nolint: gocyclo
 	t.Parallel()
 
@@ -391,7 +387,6 @@ func TestClient_readMessages(t *testing.T) { // nolint: gocyclo
 
 		// Pipe errors to the connection.
 		inErrs := tc.inErrs()
-		timeoutCh := make(chan struct{})
 
 		var wg sync.WaitGroup
 		wg.Add(2)
@@ -412,12 +407,6 @@ func TestClient_readMessages(t *testing.T) { // nolint: gocyclo
 				logEvent("writer", id, "signaled done (nil error expected)")
 				return
 			}
-
-			// If we expect an error, then we wait and then send a
-			// timeout signal so that we don't hold up the rest of
-			// the test suite.
-			time.Sleep(testTimeoutDuration)
-
 		}(id, inErrs, tc.wantErr)
 
 		// Register the fake connection.
@@ -464,9 +453,6 @@ func TestClient_readMessages(t *testing.T) { // nolint: gocyclo
 				break loop
 			case <-done:
 				logEvent("main  ", id, "done received. breaking.")
-				break loop
-			case <-timeoutCh:
-				logEvent("main  ", id, "timeout received. breaking.")
 				break loop
 			}
 		}
