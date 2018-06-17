@@ -87,9 +87,9 @@ func newTestServer(fn http.HandlerFunc, tls bool) *httptest.Server {
 
 		// Save the testing certificate to the TLS client config.
 		//
-		// I'm not sure why ts.TLS doesn't contain certificate
-		// information. However, this seems to make the testing TLS
-		// certificate be trusted by the client.
+		// I'm not sure why ts.TLS doesn't contain certificate information.
+		// However, this seems to make the testing TLS certificate be trusted by
+		// the client.
 		ts.TLS.RootCAs = x509.NewCertPool()
 		ts.TLS.RootCAs.AddCert(ts.Certificate())
 	} else {
@@ -218,7 +218,7 @@ func logEvent(section, id, msg string) {
 	}
 }
 
-func TestClient_readMessages(t *testing.T) { // nolint: gocyclo
+func TestClient_ReadMessages(t *testing.T) { // nolint: gocyclo
 	t.Parallel()
 
 	cases := map[string]struct {
@@ -421,13 +421,13 @@ func TestClient_readMessages(t *testing.T) { // nolint: gocyclo
 			msgHandler := func(msg Message) { msgs <- msg }
 			errHandler := func(err error) { errs <- err }
 
-			// Process all messages. This will finish when the
-			// connection is closed.
+			// Process all messages. This will finish when the connection is
+			// closed.
 			c.ReadMessages(msgHandler, errHandler)
 			logEvent("reader", id, "finished reading messages")
 
-			// At this point, the connection has been closed and the
-			// done signal can be sent.
+			// At this point, the connection has been closed and the done signal
+			// can be sent.
 			wg.Done()
 			logEvent("reader", id, "signaled done")
 		}(id)
@@ -443,9 +443,8 @@ func TestClient_readMessages(t *testing.T) { // nolint: gocyclo
 		for {
 			select {
 			case <-msgs:
-				// Reset the connection so it fails again. This
-				// is the key to the whole test. We are
-				// simulating as lots of combinations of
+				// Reset the connection so it fails again. This is the key to
+				// the whole test. We are simulating as lots of combinations of
 				// consecutive failures.
 				go c.SetConn(fconn)
 			case err = <-errs:
@@ -461,9 +460,9 @@ func TestClient_readMessages(t *testing.T) { // nolint: gocyclo
 		testErrMatches(t, id, err, tc.wantErr)
 	}
 
-	// We print the accumulated logs because merely printing them to the
-	// screen as they occur tends to affect the timing of these tests, which
-	// results in hard to identify Heisenbugs.
+	// We print the accumulated logs because merely printing them to the screen
+	// as they occur tends to affect the timing of these tests, which results in
+	// hard to identify Heisenbugs.
 	if logs != "" {
 		fmt.Println(logs)
 	}
