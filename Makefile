@@ -8,6 +8,8 @@ cover:
 	go test -coverprofile=c.out -covermode=atomic -race ./...
 
 lint:
+	go get -u github.com/alecthomas/gometalinter
+	gometalinter --install
 	$(GOPATH)/bin/gometalinter \
 	--cyclo-over 12 \
 	--disable gotype \
