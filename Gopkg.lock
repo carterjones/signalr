@@ -2,25 +2,32 @@
 
 
 [[projects]]
+  digest = "1:73af1e133d44a4a7a537f9a51faef28d10ad08175fd3fd27250a3789c1b41eee"
   name = "github.com/carterjones/go-cloudflare-scraper"
   packages = ["."]
+  pruneopts = "UT"
   revision = "e1c190340950851b5cd7fae8f809e091fa2daffd"
   version = "v0.1.2"
 
 [[projects]]
+  digest = "1:cee8e8ac80df6373e7daa11baf1f98c1b6f7242c49ccae7e1ec34a971dc408d9"
   name = "github.com/gorilla/websocket"
   packages = ["."]
-  revision = "ea4d1f681babbce9545c9c5f3d5194a789c89f5b"
-  version = "v1.2.0"
+  pruneopts = "UT"
+  revision = "3ff3320c2a1756a3691521efc290b4701575147c"
+  version = "v1.3.0"
 
 [[projects]]
+  digest = "1:40e195917a951a8bf867cd05de2a46aaf1806c50cf92eebf4c16f78cd196f747"
   name = "github.com/pkg/errors"
   packages = ["."]
+  pruneopts = "UT"
   revision = "645ef00459ed84a119197bfb8d8205042c6df63d"
   version = "v0.8.0"
 
 [[projects]]
   branch = "master"
+  digest = "1:dbfe572cc258e5bcf54cb650a06d90edd0da04e42ca1ed909cc1d49f00011c63"
   name = "github.com/robertkrimen/otto"
   packages = [
     ".",
@@ -29,22 +36,29 @@
     "file",
     "parser",
     "registry",
-    "token"
+    "token",
   ]
-  revision = "03d472dc43abece8691e609a23d295ab732abba6"
+  pruneopts = "UT"
+  revision = "15f95af6e78dcd2030d8195a138bd88d4f403546"
 
 [[projects]]
+  digest = "1:9935525a8c49b8434a0b0a54e1980e94a6fae73aaff45c5d33ba8dff69de123e"
   name = "gopkg.in/sourcemap.v1"
   packages = [
     ".",
-    "base64vlq"
+    "base64vlq",
   ]
+  pruneopts = "UT"
   revision = "6e83acea0053641eff084973fee085f0c193c61a"
   version = "v1.0.5"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "56620f779974aea00af1d5867d72338294d0448462a39636d94295adcc959fb7"
+  input-imports = [
+    "github.com/carterjones/go-cloudflare-scraper",
+    "github.com/gorilla/websocket",
+    "github.com/pkg/errors",
+  ]
   solver-name = "gps-cdcl"
   solver-version = 1
