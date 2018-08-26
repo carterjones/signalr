@@ -1,0 +1,20 @@
+language: go
+
+go:
+  - "1.10"
+
+jobs:
+  include:
+    - stage: Run linters, tests, and code coverage
+      script: make lint
+      env: TASK=Run linters
+    - script: make test
+      env: TASK=Run tests
+    - script:
+      - curl -L https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64 > ./cc-test-reporter
+      - chmod +x ./cc-test-reporter
+      - ./cc-test-reporter before-build
+      - make cover
+      - ./cc-test-reporter after-build --exit-code $TRAVIS_TEST_RESULT
+      - bash <(curl -s https://codecov.io/bash)
+      env: TASK=Code coverage

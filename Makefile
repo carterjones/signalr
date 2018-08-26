@@ -6,6 +6,7 @@ test:
 
 cover:
 	go test -coverprofile=c.out -covermode=atomic -race ./...
+	cp c.out coverage.txt
 
 lint:
 	go get -u github.com/alecthomas/gometalinter
