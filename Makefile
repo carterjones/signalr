@@ -9,7 +9,7 @@ cover:
 	cp c.out coverage.txt
 
 lint:
-	go get -u github.com/alecthomas/gometalinter
+	/bin/bash -c "GO111MODULE=off go get -u github.com/alecthomas/gometalinter"
 	gometalinter --install
 	$(GOPATH)/bin/gometalinter \
 	--cyclo-over 12 \
