@@ -1,5 +1,5 @@
 build:
-	go build
+	go build -mod=vendor
 
 test:
 	go test -race ./...
@@ -21,5 +21,7 @@ lint:
 	./...
 
 update:
-	dep ensure -update
+	go get -u ./...
+	go mod tidy
+	go mod vendor
 	pre-commit autoupdate
