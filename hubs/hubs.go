@@ -36,11 +36,11 @@ type ClientMsg struct {
 func (cm *ClientMsg) MarshalJSON() (buf []byte, err error) {
 	var args []byte
 	for _, a := range cm.A {
-		switch a.(type) {
+		switch a := a.(type) {
 		case []byte:
-			args = append(args, a.([]byte)...)
+			args = append(args, a...)
 		case string:
-			args = append(args, []byte(a.(string))...)
+			args = append(args, a...)
 		default:
 			err = errors.New("unsupported argument type")
 			return
