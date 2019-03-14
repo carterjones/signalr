@@ -234,9 +234,9 @@ func throw503Error(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("503 error"))
 }
 
-func throw123Error(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(123)
-	w.Write([]byte("123 error"))
+func throw678Error(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(678)
+	w.Write([]byte("678 error"))
 }
 
 func throw404Error(w http.ResponseWriter, r *http.Request) {
@@ -305,10 +305,10 @@ func TestClient_Negotiate(t *testing.T) {
 			wantErr: "503 Service Unavailable",
 		},
 		"default error": {
-			fn:      throw123Error,
+			fn:      throw678Error,
 			in:      &signalr.Client{},
 			exp:     &signalr.Client{},
-			wantErr: "123 status code",
+			wantErr: "678 status code",
 		},
 		"failed get request": {
 			fn:      causeWriteResponseTimeout,
@@ -858,8 +858,8 @@ func TestClient_Init(t *testing.T) {
 		},
 		"failed connect": {
 			negotiateFn: signalr.TestNegotiate,
-			connectFn:   throw123Error,
-			wantErr:     "connect failed: xconnect failed: 123 status code 123",
+			connectFn:   throw678Error,
+			wantErr:     "connect failed: xconnect failed: 678 status code 678",
 		},
 		"failed start": {
 			negotiateFn: signalr.TestNegotiate,
