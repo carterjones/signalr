@@ -285,9 +285,25 @@ func (c *Client) xconnect(url string, isReconnect bool) (*websocket.Conn, error)
 		jar = c.HTTPClient.Jar
 	}
 
+	// Set the proxy to use the value from the environment by default.
+	proxy := http.ProxyFromEnvironment
+
+	// Check to see if the HTTP client transport is defined.
+	if t, ok := c.HTTPClient.Transport.(*http.Transport); ok {
+		// If the client is an HTTP client, then it will have a proxy defined.
+		// By default, this is set to http.ProxyFromEnvironment. If it is not
+		// that function, then it will be some other valid function; otherwise
+		// the code won't compile. Therefore, we choose to use that function as
+		// our proxy.
+		//
+		// For details about the default value of the proxy, see here:
+		// https://github.com/golang/go/blob/cf4691650c3c556f19844a881a32792a919ee8d1/src/net/http/transport.go#L43
+		proxy = t.Proxy
+	}
+
 	// Create a dialer that uses the supplied TLS client configuration.
 	dialer := &websocket.Dialer{
-		Proxy:           http.ProxyFromEnvironment,
+		Proxy:           proxy,
 		TLSClientConfig: c.TLSClientConfig,
 		Jar:             jar,
 	}
