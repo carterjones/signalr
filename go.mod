@@ -11,6 +11,7 @@ require (
 	github.com/alexkohler/nakedret v0.0.0-20171106223215-c0e305a4f690 // indirect
 	github.com/carterjones/go-cloudflare-scraper v0.1.2
 	github.com/client9/misspell v0.3.4 // indirect
+	github.com/elazarl/goproxy v0.0.0-20181111060418-2ce16c963a8a
 	github.com/golang/lint v0.0.0-20181026193005-c67002cb31c3 // indirect
 	github.com/google/shlex v0.0.0-20181106134648-c34317bd91bf // indirect
 	github.com/gordonklaus/ineffassign v0.0.0-20180909121442-1003c8bd00dc // indirect
