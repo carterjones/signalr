@@ -23,5 +23,5 @@ lint:
 update:
 	go get -u ./...
 	go mod tidy
-	go mod vendor
+	go mod vendor -v
 	pre-commit autoupdate
