@@ -62,6 +62,11 @@ Cryptocurrency examples:
 - [Bittrex](https://github.com/carterjones/signalr/blob/master/examples/bittrex/main.go)
 - [Cryptopia](https://github.com/carterjones/signalr/blob/master/examples/cryptopia/main.go)
 
+Proxy examples:
+
+- [No authentication](https://github.com/carterjones/signalr/blob/master/examples/proxy-simple)
+- [With authentication](https://github.com/carterjones/signalr/blob/master/examples/proxy-authenticated)
+
 # Documentation
 
 - GoDoc: https://godoc.org/github.com/carterjones/signalr
