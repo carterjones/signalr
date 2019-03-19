@@ -98,18 +98,20 @@ func TestTestCompleteHandler(t *testing.T) {
 	}
 
 	for id, tc := range cases {
+		tc := tc
 		recorder := httptest.NewRecorder()
 
 		var customErr error
 		ts := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if tc.customOrigin != "" {
+			switch {
+			case tc.customOrigin != "":
 				r.Header.Set("Origin", tc.customOrigin)
 				customErr = catchErr(signalr.TestCompleteHandler, w, r)
-			} else if tc.customWriter != nil {
+			case tc.customWriter != nil:
 				customErr = catchErr(signalr.TestCompleteHandler, tc.customWriter, r)
-			} else if !tc.isWebsocketCall {
+			case !tc.isWebsocketCall:
 				signalr.TestCompleteHandler(recorder, r)
-			} else {
+			default:
 				signalr.TestCompleteHandler(w, r)
 			}
 		}))

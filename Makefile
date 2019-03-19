@@ -9,16 +9,8 @@ cover:
 	cp c.out coverage.txt
 
 lint:
-	/bin/bash -c "GO111MODULE=off go get -u github.com/alecthomas/gometalinter"
-	gometalinter --install
-	$(GOPATH)/bin/gometalinter \
-	--cyclo-over 12 \
-	--disable gotype \
-	--disable gotypex \
-	--enable nakedret \
-	--exclude "/usr/local/go/src/" \
-	--vendor \
-	./...
+	/bin/bash -c "golangci-lint --version | grep -q 1.15.0 || curl -sfL https://install.goreleaser.com/github.com/golangci/golangci-lint.sh | sh -s -- -b $(GOPATH)/bin v1.15.0"
+	golangci-lint run --enable-all
 
 update:
 	go get -u ./...

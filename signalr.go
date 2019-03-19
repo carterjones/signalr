@@ -82,6 +82,7 @@ type Client struct {
 	// The groups token that is used during reconnect attempts.
 	//
 	// This is an example groups token:
+	// nolint:lll
 	// yUcSohHrAZGEwK62B4Ao0WYac82p5yeRvHHInBgVmSK7jX++ym3kIgDy466yW/gRPp2l3Py8G45mRLJ9FslB3sKfsDPUNWL1b54cvjaSXCUo0znzyACxrN2Y0kNLR59h7hb6PgOSfy3Z2R5CUSVm5LZg6jg=
 	GroupsToken SafeString
 
@@ -964,10 +965,10 @@ func debugMessage(msg string, v ...interface{}) {
 	}
 }
 
-func prefixedID(ID string) string {
-	if ID == "" {
+func prefixedID(id string) string {
+	if id == "" {
 		return ""
 	}
 
-	return "[" + ID + "] "
+	return "[" + id + "] "
 }

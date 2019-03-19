@@ -116,7 +116,8 @@ func newTestClient(protocol, endpoint, connectionData string, params map[string]
 	return c
 }
 
-func negotiate(w http.ResponseWriter, r *http.Request) {
+func negotiate(w http.ResponseWriter, _ *http.Request) {
+	// nolint:lll
 	_, err := w.Write([]byte(`{"ConnectionToken":"hello world","ConnectionId":"1234-ABC","URL":"/signalr","ProtocolVersion":"1337"}`))
 	if err != nil {
 		log.Panic(err)
@@ -153,7 +154,7 @@ func reconnect(w http.ResponseWriter, r *http.Request) {
 	connect(w, r)
 }
 
-func start(w http.ResponseWriter, r *http.Request) {
+func start(w http.ResponseWriter, _ *http.Request) {
 	_, err := w.Write([]byte(`{"Response":"started"}`))
 	if err != nil {
 		log.Panic(err)
@@ -202,18 +203,13 @@ func panicErr(err error) {
 	}
 }
 
-// Create a variable to store the logs that we will print after the tests
-// complete.
-var logs = ""
-var logsMux = sync.Mutex{}
-
 // Use a custom log function so that they can be enabled only when an
 // environment variable is set.
-func logEvent(section, id, msg string) {
+func logEvent(section, id, msg string, logs *string, logsMux sync.Locker) {
 	logEvents := os.Getenv("LOG_EVENTS")
 	if logEvents != "" {
 		logsMux.Lock()
-		logs = logs + fmt.Sprintf("[%s | %s] %s\n", section, id, msg)
+		*logs += fmt.Sprintf("[%s | %s] %s\n", section, id, msg)
 		logsMux.Unlock()
 	}
 }
@@ -351,18 +347,24 @@ func TestClient_ReadMessages(t *testing.T) { // nolint: gocyclo
 		},
 	}
 
+	// Create a variable to store the logs that we will print after the tests
+	// complete.
+	var logs = ""
+	var logsMux = sync.Mutex{}
+
 	for id, tc := range cases {
 		ts := newTestServer(http.HandlerFunc(
 			func(w http.ResponseWriter, r *http.Request) {
-				if strings.Contains(r.URL.Path, "/negotiate") {
+				switch {
+				case strings.Contains(r.URL.Path, "/negotiate"):
 					negotiate(w, r)
-				} else if strings.Contains(r.URL.Path, "/connect") {
+				case strings.Contains(r.URL.Path, "/connect"):
 					connect(w, r)
-				} else if strings.Contains(r.URL.Path, "/reconnect") {
+				case strings.Contains(r.URL.Path, "/reconnect"):
 					reconnect(w, r)
-				} else if strings.Contains(r.URL.Path, "/start") {
+				case strings.Contains(r.URL.Path, "/start"):
 					start(w, r)
-				} else {
+				default:
 					log.Println("url:", r.URL)
 				}
 			}), true)
@@ -394,17 +396,17 @@ func TestClient_ReadMessages(t *testing.T) { // nolint: gocyclo
 			for tErr := range inErrs {
 				fconn.errs <- errors.New(tErr)
 			}
-			logEvent("writer", id, "finished sending errors")
+			logEvent("writer", id, "finished sending errors", &logs, &logsMux)
 
 			// If we don't expect any errors...
 			if wantErr == nil {
 				// Signal that the connection should close.
 				c.Close()
-				logEvent("writer", id, "signaled to close channel (nil error expected)")
+				logEvent("writer", id, "signaled to close channel (nil error expected)", &logs, &logsMux)
 
 				// Mark this goroutine as done.
 				wg.Done()
-				logEvent("writer", id, "signaled done (nil error expected)")
+				logEvent("writer", id, "signaled done (nil error expected)", &logs, &logsMux)
 				return
 			}
 		}(id, inErrs, tc.wantErr)
@@ -424,12 +426,12 @@ func TestClient_ReadMessages(t *testing.T) { // nolint: gocyclo
 			// Process all messages. This will finish when the connection is
 			// closed.
 			c.ReadMessages(msgHandler, errHandler)
-			logEvent("reader", id, "finished reading messages")
+			logEvent("reader", id, "finished reading messages", &logs, &logsMux)
 
 			// At this point, the connection has been closed and the done signal
 			// can be sent.
 			wg.Done()
-			logEvent("reader", id, "signaled done")
+			logEvent("reader", id, "signaled done", &logs, &logsMux)
 		}(id)
 
 		// Wait for both loops to be done. Then send the done signal.
@@ -448,10 +450,10 @@ func TestClient_ReadMessages(t *testing.T) { // nolint: gocyclo
 				// consecutive failures.
 				go c.SetConn(fconn)
 			case err = <-errs:
-				logEvent("main  ", id, "err received. breaking.")
+				logEvent("main  ", id, "err received. breaking.", &logs, &logsMux)
 				break loop
 			case <-done:
-				logEvent("main  ", id, "done received. breaking.")
+				logEvent("main  ", id, "done received. breaking.", &logs, &logsMux)
 				break loop
 			}
 		}
@@ -509,16 +511,17 @@ func TestClient_ReadMessages_longReconnectAttempt(t *testing.T) {
 
 	ts := newTestServer(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
-			if strings.Contains(r.URL.Path, "/negotiate") {
+			switch {
+			case strings.Contains(r.URL.Path, "/negotiate"):
 				negotiate(w, r)
-			} else if strings.Contains(r.URL.Path, "/connect") {
+			case strings.Contains(r.URL.Path, "/connect"):
 				connect(w, r)
-			} else if strings.Contains(r.URL.Path, "/reconnect") {
+			case strings.Contains(r.URL.Path, "/reconnect"):
 				// Intentionally wait indefinitely on reconnect.
 				select {}
-			} else if strings.Contains(r.URL.Path, "/start") {
+			case strings.Contains(r.URL.Path, "/start"):
 				start(w, r)
-			} else {
+			default:
 				log.Println("url:", r.URL)
 			}
 		}), true)
@@ -946,6 +949,7 @@ func TestProcessNegotiateResponse(t *testing.T) {
 		},
 		"deferred close failure after normal return": {
 			body: fakeReadCloser{
+				// nolint:lll
 				Buffer: bytes.NewBufferString(`{"ConnectionToken":"123abc","ConnectionID":"456def","ProtocolVersion":"my-custom-protocol","Url":"super-awesome-signalr"}`),
 				cerr:   errors.New("fake close error"),
 			},
@@ -967,6 +971,7 @@ func TestProcessNegotiateResponse(t *testing.T) {
 			wantErr: "json unmarshal failed: invalid character 'i' looking for beginning of value",
 		},
 		"valid data": {
+			// nolint:lll
 			body:            fakeReadCloser{Buffer: bytes.NewBufferString(`{"ConnectionToken":"123abc","ConnectionID":"456def","ProtocolVersion":"my-custom-protocol","Url":"super-awesome-signalr"}`)},
 			connectionToken: "123abc",
 			connectionID:    "456def",

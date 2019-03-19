@@ -193,7 +193,9 @@ func hostFromServerURL(url string) (host string) {
 	return
 }
 
-var serverResponseWriteTimeout = 500 * time.Millisecond
+const (
+	serverResponseWriteTimeout = 500 * time.Millisecond
+)
 
 func newTestServer(fn http.HandlerFunc, useTLS bool) *httptest.Server {
 	// Create the server.
@@ -211,7 +213,11 @@ func newTestServer(fn http.HandlerFunc, useTLS bool) *httptest.Server {
 	return ts
 }
 
-func newTestClient(protocol, endpoint, connectionData string, params map[string]string, ts *httptest.Server) *signalr.Client {
+func newTestClient(
+	protocol, endpoint, connectionData string,
+	params map[string]string,
+	ts *httptest.Server,
+) *signalr.Client {
 	// Prepare a SignalR client.
 	c := signalr.New(hostFromServerURL(ts.URL), protocol, endpoint, connectionData, params)
 	c.HTTPClient = ts.Client()
@@ -220,6 +226,7 @@ func newTestClient(protocol, endpoint, connectionData string, params map[string]
 	if ts.TLS != nil {
 		// This is a local-only test, so we don't care about validating
 		// certificates. This simplifies things greatly.
+		// nolint:gosec
 		c.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 		c.Scheme = signalr.HTTPS
 	} else {
@@ -231,17 +238,26 @@ func newTestClient(protocol, endpoint, connectionData string, params map[string]
 
 func throw503Error(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusServiceUnavailable)
-	w.Write([]byte("503 error"))
+	_, err := w.Write([]byte("503 error"))
+	if err != nil {
+		log.Panic(err)
+	}
 }
 
 func throw678Error(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(678)
-	w.Write([]byte("678 error"))
+	_, err := w.Write([]byte("678 error"))
+	if err != nil {
+		log.Panic(err)
+	}
 }
 
 func throw404Error(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotFound)
-	w.Write([]byte("404 error"))
+	_, err := w.Write([]byte("404 error"))
+	if err != nil {
+		log.Panic(err)
+	}
 }
 
 func causeWriteResponseTimeout(w http.ResponseWriter, r *http.Request) {
@@ -261,10 +277,10 @@ func TestClient_Negotiate(t *testing.T) {
 		fn       http.HandlerFunc
 		in       *signalr.Client
 		TLS      bool
+		useDebug bool
 		exp      *signalr.Client
 		scheme   signalr.Scheme
 		params   map[string]string
-		useDebug bool
 		wantErr  string
 	}{
 		"successful http": {
@@ -318,7 +334,10 @@ func TestClient_Negotiate(t *testing.T) {
 		},
 		"invalid json": {
 			fn: func(w http.ResponseWriter, r *http.Request) {
-				w.Write([]byte("invalid json"))
+				_, err := w.Write([]byte("invalid json"))
+				if err != nil {
+					log.Panic(err)
+				}
 			},
 			in:      &signalr.Client{},
 			exp:     &signalr.Client{},
@@ -381,6 +400,8 @@ func TestClient_Negotiate(t *testing.T) {
 	}
 
 	for id, tc := range cases {
+		tc := tc
+
 		// Set the debug flag.
 		if tc.useDebug {
 			os.Setenv("DEBUG", "true")
@@ -496,7 +517,7 @@ func TestClient_Connect(t *testing.T) {
 		"custom cookie jar": {
 			fn:  signalr.TestConnect,
 			TLS: false,
-			cookies: []*http.Cookie{&http.Cookie{
+			cookies: []*http.Cookie{{
 				Name:  "hello",
 				Value: "world",
 			}},
@@ -509,6 +530,8 @@ func TestClient_Connect(t *testing.T) {
 	}
 
 	for id, tc := range cases {
+		tc := tc
+
 		// Make a cookie recording wrapper function.
 		done := make(chan struct{})
 		var cookies []*http.Cookie
@@ -590,6 +613,8 @@ func TestClient_Reconnect(t *testing.T) {
 	}
 
 	for id, tc := range cases {
+		tc := tc
+
 		// Make a cookie recording wrapper function.
 		done := make(chan struct{})
 		var groupsToken string
@@ -687,14 +712,20 @@ func TestClient_Start(t *testing.T) {
 		},
 		"invalid json sent in response to get request": {
 			startFn: func(w http.ResponseWriter, r *http.Request) {
-				w.Write([]byte("invalid json"))
+				_, err := w.Write([]byte("invalid json"))
+				if err != nil {
+					log.Panic(err)
+				}
 			},
 			connectFn: signalr.TestConnect,
 			wantErr:   "invalid character 'i' looking for beginning of value",
 		},
 		"non-'started' response": {
 			startFn: func(w http.ResponseWriter, r *http.Request) {
-				w.Write([]byte(`{"Response":"not expecting this"}`))
+				_, err := w.Write([]byte(`{"Response":"not expecting this"}`))
+				if err != nil {
+					log.Panic(err)
+				}
 			},
 			connectFn: signalr.TestConnect,
 			wantErr:   "start response is not 'started': not expecting this",
@@ -707,7 +738,10 @@ func TestClient_Start(t *testing.T) {
 				if err != nil {
 					log.Panic(err)
 				}
-				c.WriteMessage(websocket.BinaryMessage, []byte("non-text message"))
+				err = c.WriteMessage(websocket.BinaryMessage, []byte("non-text message"))
+				if err != nil {
+					log.Panic(err)
+				}
 			},
 			wantErr: "unexpected websocket control type",
 		},
@@ -719,7 +753,10 @@ func TestClient_Start(t *testing.T) {
 				if err != nil {
 					log.Panic(err)
 				}
-				c.WriteMessage(websocket.TextMessage, []byte("invalid json"))
+				err = c.WriteMessage(websocket.TextMessage, []byte("invalid json"))
+				if err != nil {
+					log.Panic(err)
+				}
 			},
 			wantErr: "invalid character 'i' looking for beginning of value",
 		},
@@ -731,7 +768,10 @@ func TestClient_Start(t *testing.T) {
 				if err != nil {
 					log.Panic(err)
 				}
-				c.WriteMessage(websocket.TextMessage, []byte(`{"S":3}`))
+				err = c.WriteMessage(websocket.TextMessage, []byte(`{"S":3}`))
+				if err != nil {
+					log.Panic(err)
+				}
 			},
 			wantErr: "unexpected S value received from server",
 		},
@@ -769,6 +809,7 @@ func TestClient_Start(t *testing.T) {
 	}
 
 	for id, tc := range cases {
+		tc := tc
 		var params map[string]string
 
 		// Create a test server that is initialized with this test
@@ -852,7 +893,10 @@ func TestClient_Init(t *testing.T) {
 		},
 		"failed negotiate": {
 			negotiateFn: func(w http.ResponseWriter, r *http.Request) {
-				w.Write([]byte("invalid json"))
+				_, err := w.Write([]byte("invalid json"))
+				if err != nil {
+					log.Panic(err)
+				}
 			},
 			wantErr: "json unmarshal failed: invalid character 'i' looking for beginning of value",
 		},
@@ -870,14 +914,17 @@ func TestClient_Init(t *testing.T) {
 	}
 
 	for id, tc := range cases {
+		tc := tc
+
 		ts := newTestServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if strings.Contains(r.URL.Path, "/negotiate") {
+			switch {
+			case strings.Contains(r.URL.Path, "/negotiate"):
 				tc.negotiateFn(w, r)
-			} else if strings.Contains(r.URL.Path, "/connect") {
+			case strings.Contains(r.URL.Path, "/connect"):
 				tc.connectFn(w, r)
-			} else if strings.Contains(r.URL.Path, "/start") {
+			case strings.Contains(r.URL.Path, "/start"):
 				tc.startFn(w, r)
-			} else {
+			default:
 				log.Println("url:", r.URL)
 			}
 		}), true)

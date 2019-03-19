@@ -10,13 +10,14 @@ import (
 // TestCompleteHandler combines the negotiate, connect, reconnect, and start
 // handlers found in this package into one complete response handler.
 func TestCompleteHandler(w http.ResponseWriter, r *http.Request) {
-	if strings.Contains(r.URL.Path, "/negotiate") {
+	switch {
+	case strings.Contains(r.URL.Path, "/negotiate"):
 		TestNegotiate(w, r)
-	} else if strings.Contains(r.URL.Path, "/connect") {
+	case strings.Contains(r.URL.Path, "/connect"):
 		TestConnect(w, r)
-	} else if strings.Contains(r.URL.Path, "/reconnect") {
+	case strings.Contains(r.URL.Path, "/reconnect"):
 		TestReconnect(w, r)
-	} else if strings.Contains(r.URL.Path, "/start") {
+	case strings.Contains(r.URL.Path, "/start"):
 		TestStart(w, r)
 	}
 }
@@ -25,6 +26,7 @@ func TestCompleteHandler(w http.ResponseWriter, r *http.Request) {
 //
 // If an error occurs while writing the response data, it will panic.
 func TestNegotiate(w http.ResponseWriter, r *http.Request) {
+	// nolint:lll
 	_, err := w.Write([]byte(`{"ConnectionToken":"hello world","ConnectionId":"1234-ABC","URL":"/signalr","ProtocolVersion":"1337"}`))
 	if err != nil {
 		panic(err)
