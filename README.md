@@ -4,6 +4,10 @@
 [![Maintainability](https://api.codeclimate.com/v1/badges/c561e13d50cdd11e97a1/maintainability)](https://codeclimate.com/github/carterjones/signalr/maintainability)
 [![codecov](https://codecov.io/gh/carterjones/signalr/branch/master/graph/badge.svg)](https://codecov.io/gh/carterjones/signalr)
 
+# Project depricated
+
+Unfortunately, I am no longer able to provide support for this project. Please see https://github.com/carterjones/signalr/network for some forks that have been created.
+
 # Overview
 
 This is my personal attempt at implementating the client side of the WebSocket
